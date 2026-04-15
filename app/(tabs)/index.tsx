@@ -1,98 +1,227 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import axios from "axios";
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+// ⚠️ 키 설정 (보안을 위해 추후 .env로 분리 권장)
+const GEMINI_API_KEY = "AIzaSyAVksNaNgOquObDjm23Qq_I__4UpMfCyqw";
+const KMA_AUTH_KEY = "PUcoXsS7SiSHKF7Eu3okRg";
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+
+const SURF_POINTS = [
+  {
+    id: "jungmun",
+    name: "중문",
+    lat: 33.24,
+    lon: 126.41,
+    area: "제주도남부앞바다",
+  },
+  {
+    id: "yangyang",
+    name: "양양",
+    lat: 38.02,
+    lon: 128.71,
+    area: "강원북부앞바다",
+  },
+  {
+    id: "songjeong",
+    name: "송정",
+    lat: 35.17,
+    lon: 129.2,
+    area: "남해동부앞바다",
+  },
+  {
+    id: "pohang",
+    name: "포항",
+    lat: 36.1,
+    lon: 129.43,
+    area: "경북남부앞바다",
+  },
+];
 
 export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+  const [selectedPoint, setSelectedPoint] = useState(SURF_POINTS[0]);
+  const [surfBriefing, setSurfBriefing] = useState("데이터 분석 중...");
+  const [loading, setLoading] = useState(true);
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+  const getSurfForecast = useCallback(
+    async (point = selectedPoint, forceRefresh = false) => {
+      setLoading(true);
+      try {
+        // 1. 캐시 확인
+        const cacheKey = `surf_cache_${point.id}`;
+        const cached = await AsyncStorage.getItem(cacheKey);
+        if (cached && !forceRefresh) {
+          const { content, timestamp } = JSON.parse(cached);
+          if (Date.now() - timestamp < 3600000) {
+            setSurfBriefing(content);
+            setLoading(false);
+            return;
+          }
+        }
+
+        // 2. Open-Meteo 호출
+        const meteoUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${point.lat}&longitude=${point.lon}&hourly=wave_height,wave_period&timezone=Asia%2FSeoul&forecast_days=1`;
+        const meteoRes = await axios.get(meteoUrl);
+        const currentHour = new Date().getHours();
+        const forecast = {
+          height: meteoRes.data.hourly.wave_height[currentHour],
+          period: meteoRes.data.hourly.wave_period[currentHour],
+        };
+
+        // 3. 기상청 특보 호출 (에러 나도 진행)
+        let warningStatus = "정상";
+        try {
+          const kmaUrl = `https://apihub.kma.go.kr/api/typ01/url/wrn_reg.php?authKey=${KMA_AUTH_KEY}`;
+          const kmaRes = await axios.get(kmaUrl, { timeout: 3000 });
+          const rawWarning = kmaRes.data || "";
+          const isAreaInWarning = rawWarning.includes(
+            point.area.replace(" ", ""),
+          );
+          if (isAreaInWarning && rawWarning.includes("경보"))
+            warningStatus = "풍랑경보 (입수 금지)";
+          else if (isAreaInWarning && rawWarning.includes("주의보"))
+            warningStatus = "풍랑주의보 (입수 신고 필수)";
+        } catch (_) {
+          console.log("KMA API Skip");
+        }
+
+        // 💡 💡 💡 수정된 부분: 모델명 앞에 'models/'를 붙여서 404 에러 방지
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+        // 만약 위 코드로도 404가 뜨면 아래 줄로 교체해 보세요:
+        // const model = genAI.getGenerativeModel({ model: "models/gemini-1.5-flash" });
+
+        const prompt = `
+        지역: ${point.name}, 파고: ${forecast.height}m, 주기: ${forecast.period}초, 특보: ${warningStatus}.
+        너는 전문 서핑 코치야. 서퍼 말투로 딱 한 줄만 브리핑해줘. 🤙
+      `;
+
+        const result = await model.generateContent(prompt);
+        const briefingText = result.response.text().trim();
+
+        setSurfBriefing(briefingText);
+        await AsyncStorage.setItem(
+          cacheKey,
+          JSON.stringify({
+            content: briefingText,
+            timestamp: Date.now(),
+          }),
+        );
+      } catch (error: any) {
+        console.log(">>> [Final Error Log]:", error);
+        setSurfBriefing(
+          `분석 실패: 모델 연결 오류 (${error.message.substring(0, 30)})`,
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [selectedPoint],
+  );
+
+  useEffect(() => {
+    getSurfForecast();
+  }, [getSurfForecast]);
+
+  const handlePointChange = (point: (typeof SURF_POINTS)[0]) => {
+    setSelectedPoint(point);
+    getSurfForecast(point);
+  };
+
+  return (
+    <ScrollView style={styles.container}>
+      <View style={styles.tabContainer}>
+        {SURF_POINTS.map((point) => (
+          <TouchableOpacity
+            key={point.id}
+            style={[
+              styles.tab,
+              selectedPoint.id === point.id && styles.activeTab,
+            ]}
+            onPress={() => handlePointChange(point)}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                selectedPoint.id === point.id && styles.activeTabText,
+              ]}
+            >
+              {point.name}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.title}>{selectedPoint.name} 실시간 브리핑 🌊</Text>
+        {loading ? (
+          <View style={styles.loadingBox}>
+            <ActivityIndicator size="small" color="#007AFF" />
+            <Text style={styles.loadingText}>파도 분석 중...</Text>
+          </View>
+        ) : (
+          <View>
+            <Text style={styles.content}>{surfBriefing}</Text>
+            <TouchableOpacity
+              style={styles.button}
+              onPress={() => getSurfForecast(selectedPoint, true)}
+            >
+              <Text style={styles.buttonText}>새로고침</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  container: { flex: 1, backgroundColor: "#F8F9FA", padding: 20 },
+  tabContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 15,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  tab: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: "#E9ECEF",
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  activeTab: { backgroundColor: "#007AFF" },
+  tabText: { fontWeight: "700", color: "#495057" },
+  activeTabText: { color: "#fff" },
+  card: {
+    backgroundColor: "#fff",
+    padding: 25,
+    borderRadius: 25,
+    elevation: 5,
+    minHeight: 160,
   },
+  title: {
+    fontSize: 18,
+    fontWeight: "900",
+    marginBottom: 15,
+    color: "#1A1A1A",
+  },
+  content: { fontSize: 16, lineHeight: 24, color: "#333", fontWeight: "700" },
+  loadingBox: { flexDirection: "row", alignItems: "center" },
+  loadingText: { marginLeft: 10, color: "#007AFF", fontWeight: "700" },
+  button: {
+    marginTop: 20,
+    backgroundColor: "#007AFF",
+    padding: 15,
+    borderRadius: 15,
+    alignItems: "center",
+  },
+  buttonText: { color: "#fff", fontWeight: "800" },
 });
