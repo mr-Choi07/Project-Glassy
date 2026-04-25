@@ -2,58 +2,48 @@ import { Tabs } from "expo-router";
 import { Home, Map, MessageCircle } from "lucide-react-native";
 import React from "react";
 import { StyleSheet, View } from "react-native";
+import { Colors } from "@/constants/theme";
 
 export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: "#007AFF",
-        tabBarInactiveTintColor: "#8E8E93",
-        tabBarStyle: {
-          height: 85,
-          paddingBottom: 25,
-          borderTopLeftRadius: 30,
-          borderTopRightRadius: 30,
-          position: "absolute", // 살짝 떠 있는 효과
-          backgroundColor: "#fff",
-        },
+        headerShown: false,
+        tabBarActiveTintColor: Colors.primary,
+        tabBarInactiveTintColor: Colors.textSubtle,
+        tabBarStyle: styles.tabBar,
+        tabBarLabelStyle: styles.tabLabel,
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: "홈",
-          tabBarIcon: ({ color }) => <Home size={24} color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Home size={22} color={color} strokeWidth={focused ? 2.5 : 1.8} />
+          ),
         }}
       />
 
-      {/* 🚀 강조된 AI 챗봇 탭 */}
       <Tabs.Screen
         name="ai-chat"
         options={{
-          title: "", // 텍스트 생략하여 아이콘 강조
+          title: "",
           tabBarIcon: ({ focused }) => (
-            <View
-              style={[
-                styles.aiButtonContainer,
-                focused && styles.aiButtonActive,
-              ]}
-            >
-              <MessageCircle
-                size={32}
-                color="#fff"
-                fill={focused ? "#fff" : "transparent"}
-              />
+            <View style={[styles.aiBtn, focused && styles.aiBtnActive]}>
+              <MessageCircle size={28} color="#fff" strokeWidth={2} />
             </View>
           ),
         }}
       />
 
       <Tabs.Screen
-        name="map" // 파일이 없다면 추후 생성 필요
+        name="explore"
         options={{
-          title: "스팟맵",
-          tabBarIcon: ({ color }) => <Map size={24} color={color} />,
+          title: "스팟",
+          tabBarIcon: ({ color, focused }) => (
+            <Map size={22} color={color} strokeWidth={focused ? 2.5 : 1.8} />
+          ),
         }}
       />
     </Tabs>
@@ -61,21 +51,38 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
-  aiButtonContainer: {
-    width: 65,
-    height: 65,
-    borderRadius: 32.5,
-    backgroundColor: "#212529", // 어두운 톤으로 강조
+  tabBar: {
+    height: 84,
+    paddingBottom: 24,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    backgroundColor: Colors.bgCard,
+    position: "absolute",
+  },
+  tabLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  aiBtn: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "#1A2E45",
     justifyContent: "center",
     alignItems: "center",
-    top: -15, // 위로 툭 튀어나오게 설정
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 5 },
+    top: -12,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 10,
+    shadowRadius: 8,
+    elevation: 8,
   },
-  aiButtonActive: {
-    backgroundColor: "#007AFF", // 활성화 시 파란색으로 변함
+  aiBtnActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+    shadowOpacity: 0.5,
   },
 });
