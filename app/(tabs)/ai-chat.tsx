@@ -2,114 +2,64 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Bot, Send, Waves } from "lucide-react-native";
 import React, { useRef, useState } from "react";
 import {
-    FlatList,
-    KeyboardAvoidingView,
-    Platform,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  FlatList, KeyboardAvoidingView, Platform,
+  SafeAreaView, StyleSheet, Text, TextInput,
+  TouchableOpacity, View,
 } from "react-native";
+import { Colors } from "@/constants/theme";
 
-// ⚠️ 실제 발급받은 API 키를 입력하세요
 const API_KEY = "AIzaSyAVksNaNgOquObDjm23Qq_I__4UpMfCyqw";
 const genAI = new GoogleGenerativeAI(API_KEY);
 
+type Message = { id: string; text: string; sender: "user" | "bot" };
+const uid = (p: string) => `${p}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
 export default function AIChatScreen() {
   const [inputText, setInputText] = useState("");
-  const [messages, setMessages] = useState([
+  const [messages, setMessages] = useState<Message[]>([
     {
-      id: "initial-1",
-      text: "안녕하세요, 승재 코치님! Glassy AI 2.5입니다. 오늘 서핑에 대해 무엇을 도와드릴까요?",
+      id: uid("bot"),
+      text: "안녕하세요! 🤙 Glassy AI 코치입니다. 오늘 서핑 컨디션이나 기술에 대해 무엇이든 물어보세요!",
       sender: "bot",
     },
   ]);
   const [isTyping, setIsTyping] = useState(false);
   const flatListRef = useRef<FlatList>(null);
-
-  // Gemini 2.5 Flash 모델 설정
   const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
   const sendMessage = async () => {
-    const trimmedInput = inputText.trim();
-    if (trimmedInput.length === 0) return;
+    const text = inputText.trim();
+    if (!text) return;
 
-    // 중복 키 에러($error) 원천 차단 ID 생성
-    const generateId = (prefix: string) =>
-      `${prefix}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
-    const userMessage = {
-      id: generateId("user"),
-      text: trimmedInput,
-      sender: "user",
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
+    const userMsg: Message = { id: uid("user"), text, sender: "user" };
+    setMessages((prev) => [...prev, userMsg]);
     setInputText("");
     setIsTyping(true);
 
     try {
       const result = await model.generateContent({
-        contents: [
-          {
-            role: "user",
-            parts: [
-              {
-                text: `너는 전문 서핑 코치 'Glassy AI'야. 친절하게 대답해줘: ${trimmedInput}`,
-              },
-            ],
-          },
-        ],
+        contents: [{ role: "user", parts: [{ text: `너는 전문 서핑 코치 'Glassy AI'야. 친절하고 전문적으로 대답해줘: ${text}` }] }],
       });
-
-      const response = await result.response;
-      const botMessage = {
-        id: generateId("bot"),
-        text: response.text(),
-        sender: "bot",
-      };
-      setMessages((prev) => [...prev, botMessage]);
-    } catch (error: any) {
-      console.error("채팅 에러:", error);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: generateId("err"),
-          text: "통신에 문제가 생겼어요. 다시 한번 말씀해주세요!",
-          sender: "bot",
-        },
-      ]);
+      const botMsg: Message = { id: uid("bot"), text: result.response.text(), sender: "bot" };
+      setMessages((prev) => [...prev, botMsg]);
+    } catch {
+      setMessages((prev) => [...prev, { id: uid("err"), text: "통신에 문제가 생겼어요. 다시 한번 말씀해주세요! 🌊", sender: "bot" }]);
     } finally {
       setIsTyping(false);
-      setTimeout(() => flatListRef.current?.scrollToEnd(), 200);
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 150);
     }
   };
 
-  const renderMessage = ({ item }: any) => (
-    <View
-      style={[
-        styles.messageWrapper,
-        item.sender === "user"
-          ? { alignItems: "flex-end" }
-          : { alignItems: "flex-start" },
-      ]}
-    >
-      <View
-        style={[
-          styles.messageBubble,
-          item.sender === "user" ? styles.userBubble : styles.botBubble,
-        ]}
-      >
-        {item.sender === "bot" && (
-          <View style={styles.botHeader}>
-            <Bot size={14} color="#007AFF" style={{ marginRight: 4 }} />
-            <Text style={styles.botNameText}>Glassy AI</Text>
-          </View>
-        )}
-        <Text style={item.sender === "user" ? styles.userText : styles.botText}>
-          {item.text}
-        </Text>
+  const renderMessage = ({ item }: { item: Message }) => (
+    <View style={[styles.msgWrapper, item.sender === "user" ? styles.msgRight : styles.msgLeft]}>
+      {item.sender === "bot" && (
+        <View style={styles.avatar}>
+          <Bot size={14} color={Colors.primary} />
+        </View>
+      )}
+      <View style={[styles.bubble, item.sender === "user" ? styles.userBubble : styles.botBubble]}>
+        {item.sender === "bot" && <Text style={styles.botName}>Glassy AI</Text>}
+        <Text style={item.sender === "user" ? styles.userText : styles.botText}>{item.text}</Text>
       </View>
     </View>
   );
@@ -119,47 +69,62 @@ export default function AIChatScreen() {
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.container}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
       >
+        {/* Header */}
         <View style={styles.header}>
-          <Waves size={20} color="#007AFF" />
-          <Text style={styles.headerTitle}>Glassy AI 코치</Text>
+          <View style={styles.headerLeft}>
+            <View style={styles.headerIcon}>
+              <Waves size={18} color={Colors.primary} />
+            </View>
+            <View>
+              <Text style={styles.headerTitle}>Glassy AI 코치</Text>
+              <Text style={styles.headerSub}>서핑의 모든 것을 알고 있어요 🤙</Text>
+            </View>
+          </View>
+          <View style={styles.onlineBadge}>
+            <View style={styles.onlineDot} />
+            <Text style={styles.onlineText}>온라인</Text>
+          </View>
         </View>
 
+        {/* Messages */}
         <FlatList
           ref={flatListRef}
           data={messages}
           renderItem={renderMessage}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.chatList}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
+          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
           showsVerticalScrollIndicator={false}
         />
 
+        {/* Typing indicator */}
         {isTyping && (
-          <View style={styles.typingContainer}>
-            <Text style={styles.typingIndicator}>파도 분석 중...</Text>
+          <View style={styles.typingRow}>
+            <View style={styles.typingDots}>
+              {[0,1,2].map((i) => <View key={i} style={[styles.tDot, i === 1 && styles.tDotMid]} />)}
+            </View>
+            <Text style={styles.typingText}>파도 분석 중...</Text>
           </View>
         )}
 
-        <View style={styles.footerContainer}>
-          <View style={styles.inputContainer}>
+        {/* Input bar */}
+        <View style={styles.footer}>
+          <View style={styles.inputRow}>
             <TextInput
               style={styles.input}
               value={inputText}
               onChangeText={setInputText}
-              placeholder="메시지를 입력하세요..."
-              placeholderTextColor="#ADB5BD"
+              placeholder="오늘 파도 어때요?"
+              placeholderTextColor={Colors.textSubtle}
               onSubmitEditing={sendMessage}
+              multiline
             />
             <TouchableOpacity
-              style={[
-                styles.sendButton,
-                { backgroundColor: inputText.trim() ? "#007AFF" : "#E9ECEF" },
-              ]}
+              style={[styles.sendBtn, !!inputText.trim() && styles.sendBtnActive]}
               onPress={sendMessage}
             >
-              <Send size={18} color={inputText.trim() ? "#fff" : "#ADB5BD"} />
+              <Send size={18} color={inputText.trim() ? "#fff" : Colors.textSubtle} />
             </TouchableOpacity>
           </View>
         </View>
@@ -169,67 +134,41 @@ export default function AIChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#fff" },
-  container: { flex: 1, backgroundColor: "#F8F9FA" },
-  header: {
-    height: 60,
-    backgroundColor: "#fff",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#212529",
-    marginLeft: 8,
-  },
-  chatList: { paddingHorizontal: 15, paddingVertical: 20 },
-  messageWrapper: { width: "100%", marginBottom: 12 },
-  messageBubble: {
-    maxWidth: "80%",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  userBubble: { backgroundColor: "#007AFF", borderBottomRightRadius: 4 },
-  botBubble: {
-    backgroundColor: "#FFFFFF",
-    borderBottomLeftRadius: 4,
-    borderWidth: 1,
-    borderColor: "#E9ECEF",
-  },
-  botHeader: { flexDirection: "row", alignItems: "center", marginBottom: 4 },
-  botNameText: { fontSize: 12, color: "#007AFF", fontWeight: "700" },
-  userText: { color: "#fff", lineHeight: 22, fontSize: 15 },
-  botText: { color: "#212529", lineHeight: 22, fontSize: 15 },
-  typingContainer: { paddingHorizontal: 20, marginBottom: 10 },
-  typingIndicator: { color: "#888", fontSize: 12, fontStyle: "italic" },
-  footerContainer: {
-    paddingHorizontal: 15,
-    paddingTop: 10,
-    paddingBottom: Platform.OS === "ios" ? 120 : 100, // 탭 바 높이 대응
-    backgroundColor: "#fff",
-    borderTopWidth: 1,
-    borderTopColor: "#eee",
-  },
-  inputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F1F3F5",
-    borderRadius: 25,
-    paddingHorizontal: 15,
-    height: 50,
-  },
-  input: { flex: 1, fontSize: 15, color: "#212529" },
-  sendButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: "center",
-    alignItems: "center",
-    marginLeft: 8,
-  },
+  safeArea:      { flex: 1, backgroundColor: Colors.bg },
+  container:     { flex: 1 },
+
+  header:        { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 14, backgroundColor: Colors.bgCard, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  headerLeft:    { flexDirection: "row", alignItems: "center", gap: 12 },
+  headerIcon:    { width: 38, height: 38, borderRadius: 12, backgroundColor: "rgba(14,165,233,0.12)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(14,165,233,0.2)" },
+  headerTitle:   { color: Colors.text, fontSize: 16, fontWeight: "800" },
+  headerSub:     { color: Colors.textSubtle, fontSize: 12, fontWeight: "500", marginTop: 1 },
+  onlineBadge:   { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(16,185,129,0.1)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
+  onlineDot:     { width: 7, height: 7, borderRadius: 3.5, backgroundColor: Colors.success },
+  onlineText:    { color: Colors.success, fontSize: 12, fontWeight: "700" },
+
+  chatList:      { paddingHorizontal: 16, paddingVertical: 20, gap: 12 },
+  msgWrapper:    { flexDirection: "row", alignItems: "flex-end", gap: 8 },
+  msgRight:      { justifyContent: "flex-end" },
+  msgLeft:       { justifyContent: "flex-start" },
+
+  avatar:        { width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(14,165,233,0.12)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border },
+  bubble:        { maxWidth: "78%", paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18 },
+  userBubble:    { backgroundColor: Colors.primary, borderBottomRightRadius: 4 },
+  botBubble:     { backgroundColor: Colors.bgCard, borderBottomLeftRadius: 4, borderWidth: 1, borderColor: Colors.border },
+
+  botName:       { color: Colors.primary, fontSize: 11, fontWeight: "800", marginBottom: 4, letterSpacing: 0.3 },
+  userText:      { color: "#fff", fontSize: 15, lineHeight: 22 },
+  botText:       { color: Colors.text, fontSize: 15, lineHeight: 22 },
+
+  typingRow:     { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 20, paddingBottom: 10 },
+  typingDots:    { flexDirection: "row", gap: 4 },
+  tDot:          { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.textSubtle },
+  tDotMid:       { backgroundColor: Colors.textMuted },
+  typingText:    { color: Colors.textSubtle, fontSize: 12, fontStyle: "italic" },
+
+  footer:        { paddingHorizontal: 16, paddingTop: 10, paddingBottom: Platform.OS === "ios" ? 110 : 90, backgroundColor: Colors.bgCard, borderTopWidth: 1, borderTopColor: Colors.border },
+  inputRow:      { flexDirection: "row", alignItems: "flex-end", gap: 10 },
+  input:         { flex: 1, minHeight: 46, maxHeight: 120, backgroundColor: Colors.bgSurface, borderRadius: 23, paddingHorizontal: 18, paddingVertical: 12, color: Colors.text, fontSize: 15, borderWidth: 1, borderColor: Colors.border },
+  sendBtn:       { width: 46, height: 46, borderRadius: 23, backgroundColor: Colors.bgSurface, borderWidth: 1, borderColor: Colors.border, alignItems: "center", justifyContent: "center" },
+  sendBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
 });

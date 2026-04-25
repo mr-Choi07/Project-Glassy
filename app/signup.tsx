@@ -2,16 +2,11 @@ import { FontAwesome } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+  KeyboardAvoidingView, Platform, ScrollView,
+  StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Colors } from "@/constants/theme";
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -24,28 +19,19 @@ export default function SignupScreen() {
   const [error, setError] = useState("");
 
   const sendVerification = () => {
-    if (!phone) {
-      setError("전화번호를 입력해주세요.");
-      return;
-    }
-
-    setError("");
-    setCodeSent(true);
+    if (!phone) { setError("전화번호를 입력해주세요."); return; }
+    setError(""); setCodeSent(true);
   };
 
   const handleSignup = () => {
-    if (password !== confirmPassword) {
-      setError("비밀번호가 일치하지 않습니다.");
-      return;
-    }
-
-    setError("");
-    router.replace({ pathname: "/" });
+    if (password !== confirmPassword) { setError("비밀번호가 일치하지 않습니다."); return; }
+    setError(""); router.replace({ pathname: "/" });
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.backgroundAccent} />
+      <View style={styles.orbTR} />
+      <View style={styles.orbBL} />
 
       <KeyboardAvoidingView
         style={styles.flex}
@@ -54,43 +40,45 @@ export default function SignupScreen() {
         <ScrollView
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
+          {/* Header */}
           <View style={styles.header}>
             <Text style={styles.brand}>Glassy</Text>
-            <Text style={styles.title}>회원가입</Text>
-            <Text style={styles.description}>
-              기본 정보만 입력하면 바로 시작할 수 있어요.
-            </Text>
+            <Text style={styles.title}>계정을{"\n"}만들어보세요 🤙</Text>
+            <Text style={styles.description}>3분이면 가입 완료. 지금 바로 파도를 분석하세요.</Text>
 
-            <View style={styles.summaryCard}>
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryValue}>3분 이내</Text>
-                <Text style={styles.summaryLabel}>가입 완료</Text>
+            <View style={styles.statsRow}>
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>3분</Text>
+                <Text style={styles.statLabel}>이내 완료</Text>
               </View>
-              <View style={styles.summaryDivider} />
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryValue}>간단 인증</Text>
-                <Text style={styles.summaryLabel}>전화번호 확인</Text>
+              <View style={styles.statDivider} />
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>무료</Text>
+                <Text style={styles.statLabel}>즉시 이용</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>AI</Text>
+                <Text style={styles.statLabel}>코치 포함</Text>
               </View>
             </View>
           </View>
 
-          <View style={styles.formCard}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardTitle}>기본 정보 입력</Text>
-              <Text style={styles.cardMeta}>필수 항목만 먼저 입력합니다.</Text>
-            </View>
+          {/* Form card */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>기본 정보 입력</Text>
+            <Text style={styles.cardMeta}>필수 항목만 먼저 입력합니다.</Text>
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>이메일</Text>
               <TextInput
                 style={styles.input}
-                value={email}
-                onChangeText={setEmail}
+                value={email} onChangeText={setEmail}
                 placeholder="example@mail.com"
-                placeholderTextColor="#94A3B8"
-                keyboardType="email-address"
-                autoCapitalize="none"
+                placeholderTextColor={Colors.textSubtle}
+                keyboardType="email-address" autoCapitalize="none"
               />
             </View>
 
@@ -98,10 +86,9 @@ export default function SignupScreen() {
               <Text style={styles.label}>비밀번호</Text>
               <TextInput
                 style={styles.input}
-                value={password}
-                onChangeText={setPassword}
+                value={password} onChangeText={setPassword}
                 placeholder="••••••••"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor={Colors.textSubtle}
                 secureTextEntry
               />
             </View>
@@ -109,11 +96,10 @@ export default function SignupScreen() {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>비밀번호 확인</Text>
               <TextInput
-                style={styles.input}
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
+                style={[styles.input, confirmPassword.length > 0 && password !== confirmPassword && styles.inputError]}
+                value={confirmPassword} onChangeText={setConfirmPassword}
                 placeholder="••••••••"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor={Colors.textSubtle}
                 secureTextEntry
               />
             </View>
@@ -123,60 +109,53 @@ export default function SignupScreen() {
               <View style={styles.phoneRow}>
                 <TextInput
                   style={[styles.input, styles.phoneInput]}
-                  value={phone}
-                  onChangeText={setPhone}
+                  value={phone} onChangeText={setPhone}
                   placeholder="010-1234-5678"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={Colors.textSubtle}
                   keyboardType="phone-pad"
                 />
-                <TouchableOpacity
-                  style={styles.verifyButton}
-                  onPress={sendVerification}
-                >
-                  <Text style={styles.verifyButtonText}>인증</Text>
+                <TouchableOpacity style={styles.verifyBtn} onPress={sendVerification}>
+                  <Text style={styles.verifyBtnText}>인증</Text>
                 </TouchableOpacity>
               </View>
             </View>
 
-            {codeSent ? (
+            {codeSent && (
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>인증번호</Text>
                 <TextInput
                   style={styles.input}
-                  value={verificationCode}
-                  onChangeText={setVerificationCode}
+                  value={verificationCode} onChangeText={setVerificationCode}
                   placeholder="123456"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={Colors.textSubtle}
                   keyboardType="number-pad"
                 />
               </View>
-            ) : null}
+            )}
 
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-            <TouchableOpacity style={styles.primaryButton} onPress={handleSignup}>
-              <Text style={styles.primaryButtonText}>회원가입</Text>
+            <TouchableOpacity style={styles.primaryBtn} onPress={handleSignup}>
+              <Text style={styles.primaryBtnText}>회원가입</Text>
             </TouchableOpacity>
 
-            <View style={styles.separatorRow}>
-              <View style={styles.separatorLine} />
-              <Text style={styles.separatorText}>또는</Text>
-              <View style={styles.separatorLine} />
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>또는</Text>
+              <View style={styles.dividerLine} />
             </View>
 
             <View style={styles.socialRow}>
-              <TouchableOpacity style={styles.socialButton}>
-                <FontAwesome name="google" size={18} color="#EA4335" />
-                <Text style={styles.socialButtonText}>Google</Text>
+              <TouchableOpacity style={styles.socialBtn}>
+                <FontAwesome name="google" size={17} color="#EA4335" />
+                <Text style={styles.socialBtnText}>Google</Text>
               </TouchableOpacity>
-              {Platform.OS === "ios" ? (
-                <TouchableOpacity
-                  style={[styles.socialButton, styles.appleButton]}
-                >
-                  <FontAwesome name="apple" size={18} color="#0F172A" />
-                  <Text style={styles.socialButtonText}>Apple</Text>
+              {Platform.OS === "ios" && (
+                <TouchableOpacity style={styles.socialBtn}>
+                  <FontAwesome name="apple" size={17} color={Colors.text} />
+                  <Text style={styles.socialBtnText}>Apple</Text>
                 </TouchableOpacity>
-              ) : null}
+              )}
             </View>
           </View>
 
@@ -193,207 +172,79 @@ export default function SignupScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#F8FAFC",
+  safeArea: { flex: 1, backgroundColor: Colors.bg },
+  flex: { flex: 1 },
+  orbTR: {
+    position: "absolute", top: -60, right: -50,
+    width: 200, height: 200, borderRadius: 100,
+    backgroundColor: "rgba(6,182,212,0.1)",
   },
-  backgroundAccent: {
-    position: "absolute",
-    top: -80,
-    left: -40,
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: "#DBEAFE",
+  orbBL: {
+    position: "absolute", bottom: -80, left: -60,
+    width: 180, height: 180, borderRadius: 90,
+    backgroundColor: "rgba(14,165,233,0.07)",
   },
-  flex: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 24,
-  },
-  header: {
-    marginBottom: 24,
-  },
+  content: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 28 },
+  header: { marginBottom: 24 },
   brand: {
-    color: "#2563EB",
-    fontSize: 15,
-    fontWeight: "700",
-    marginBottom: 16,
+    color: Colors.primary, fontSize: 15, fontWeight: "800",
+    letterSpacing: 0.5, marginBottom: 20,
   },
   title: {
-    color: "#0F172A",
-    fontSize: 30,
-    fontWeight: "800",
-    marginBottom: 8,
+    color: Colors.text, fontSize: 32, fontWeight: "800",
+    lineHeight: 40, marginBottom: 10,
   },
-  description: {
-    color: "#475569",
-    fontSize: 15,
-    lineHeight: 22,
-    marginBottom: 16,
+  description: { color: Colors.textMuted, fontSize: 15, lineHeight: 22, marginBottom: 18 },
+  statsRow: {
+    flexDirection: "row", alignItems: "center",
+    backgroundColor: Colors.bgCard, borderRadius: 18, padding: 16,
+    borderWidth: 1, borderColor: Colors.border,
   },
-  summaryCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
+  statItem: { flex: 1, alignItems: "center" },
+  statValue: { color: Colors.text, fontSize: 16, fontWeight: "800", marginBottom: 3 },
+  statLabel: { color: Colors.textSubtle, fontSize: 12 },
+  statDivider: { width: 1, height: 32, backgroundColor: Colors.border },
+  card: {
+    backgroundColor: Colors.bgCard, borderRadius: 24, padding: 22,
+    borderWidth: 1, borderColor: Colors.border, marginBottom: 24,
   },
-  summaryItem: {
-    flex: 1,
-  },
-  summaryDivider: {
-    width: 1,
-    alignSelf: "stretch",
-    backgroundColor: "#E2E8F0",
-    marginHorizontal: 12,
-  },
-  summaryValue: {
-    color: "#0F172A",
-    fontSize: 16,
-    fontWeight: "700",
-    marginBottom: 4,
-  },
-  summaryLabel: {
-    color: "#64748B",
-    fontSize: 13,
-  },
-  formCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  cardHeader: {
-    marginBottom: 16,
-  },
-  cardTitle: {
-    color: "#0F172A",
-    fontSize: 17,
-    fontWeight: "700",
-    marginBottom: 4,
-  },
-  cardMeta: {
-    color: "#64748B",
-    fontSize: 13,
-  },
-  inputGroup: {
-    marginBottom: 14,
-  },
-  label: {
-    color: "#334155",
-    fontSize: 13,
-    fontWeight: "600",
-    marginBottom: 6,
-  },
+  cardTitle: { color: Colors.text, fontSize: 17, fontWeight: "700", marginBottom: 4 },
+  cardMeta: { color: Colors.textMuted, fontSize: 13, marginBottom: 20 },
+  inputGroup: { marginBottom: 14 },
+  label: { color: Colors.textMuted, fontSize: 13, fontWeight: "600", marginBottom: 8 },
   input: {
-    height: 52,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#CBD5E1",
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 14,
-    color: "#0F172A",
-    fontSize: 15,
+    height: 52, borderRadius: 14, borderWidth: 1,
+    borderColor: Colors.border, backgroundColor: Colors.bgSurface,
+    paddingHorizontal: 16, color: Colors.text, fontSize: 15,
   },
-  phoneRow: {
-    flexDirection: "row",
-    gap: 8,
+  inputError: { borderColor: Colors.error },
+  phoneRow: { flexDirection: "row", gap: 8 },
+  phoneInput: { flex: 1 },
+  verifyBtn: {
+    minWidth: 74, height: 52, borderRadius: 14,
+    backgroundColor: Colors.bgSurface, borderWidth: 1,
+    borderColor: Colors.primary, alignItems: "center", justifyContent: "center",
   },
-  phoneInput: {
-    flex: 1,
+  verifyBtnText: { color: Colors.primary, fontSize: 14, fontWeight: "700" },
+  errorText: { color: Colors.error, fontSize: 13, marginBottom: 12 },
+  primaryBtn: {
+    height: 54, borderRadius: 16, backgroundColor: Colors.primary,
+    alignItems: "center", justifyContent: "center", marginTop: 4,
   },
-  verifyButton: {
-    minWidth: 74,
-    height: 52,
-    borderRadius: 14,
-    backgroundColor: "#E2E8F0",
-    alignItems: "center",
-    justifyContent: "center",
+  primaryBtnText: { color: "#fff", fontSize: 16, fontWeight: "800" },
+  dividerRow: { flexDirection: "row", alignItems: "center", gap: 12, marginVertical: 20 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
+  dividerText: { color: Colors.textSubtle, fontSize: 12, fontWeight: "600" },
+  socialRow: { flexDirection: "row", gap: 10 },
+  socialBtn: {
+    flex: 1, height: 50, borderRadius: 14, borderWidth: 1,
+    borderColor: Colors.border, backgroundColor: Colors.bgSurface,
+    alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8,
   },
-  verifyButtonText: {
-    color: "#0F172A",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  errorText: {
-    color: "#DC2626",
-    fontSize: 13,
-    marginBottom: 12,
-  },
-  primaryButton: {
-    height: 52,
-    borderRadius: 14,
-    backgroundColor: "#0F172A",
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 4,
-  },
-  primaryButtonText: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  separatorRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginVertical: 18,
-  },
-  separatorLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "#E2E8F0",
-  },
-  separatorText: {
-    color: "#94A3B8",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  socialRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  socialButton: {
-    flex: 1,
-    minHeight: 50,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: 8,
-  },
-  appleButton: {
-    backgroundColor: "#F8FAFC",
-  },
-  socialButtonText: {
-    color: "#0F172A",
-    fontSize: 14,
-    fontWeight: "600",
-  },
+  socialBtnText: { color: Colors.text, fontSize: 14, fontWeight: "600" },
   footerRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 6,
-    marginTop: 20,
+    flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6,
   },
-  footerText: {
-    color: "#64748B",
-    fontSize: 14,
-  },
-  footerLink: {
-    color: "#2563EB",
-    fontSize: 14,
-    fontWeight: "700",
-  },
+  footerText: { color: Colors.textMuted, fontSize: 14 },
+  footerLink: { color: Colors.primary, fontSize: 14, fontWeight: "700" },
 });
