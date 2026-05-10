@@ -1,12 +1,15 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
+import { useRouter } from "expo-router";
+import { LogOut } from "lucide-react-native";
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator, RefreshControl, ScrollView,
+  ActivityIndicator, Alert, RefreshControl, ScrollView,
   StyleSheet, Text, TouchableOpacity, View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useAuth } from "@/context/AuthContext";
 import { Colors } from "@/constants/theme";
 
 const GEMINI_API_KEY = "REMOVED_KEY";
@@ -29,6 +32,19 @@ function getCondition(height: number): { label: string; color: string } {
 }
 
 export default function HomeScreen() {
+  const { logout } = useAuth();
+  const router = useRouter();
+
+  const handleLogout = () => {
+    Alert.alert("로그아웃", "로그아웃 하시겠습니까?", [
+      { text: "취소", style: "cancel" },
+      {
+        text: "로그아웃", style: "destructive",
+        onPress: async () => { await logout(); router.replace("/intro"); },
+      },
+    ]);
+  };
+
   const [selectedPoint, setSelectedPoint] = useState(SURF_POINTS[0]);
   const [surfBriefing, setSurfBriefing] = useState("");
   const [waveHeight, setWaveHeight] = useState<number | null>(null);
@@ -112,9 +128,14 @@ export default function HomeScreen() {
             <Text style={styles.headerSub}>Good surfing 🤙</Text>
             <Text style={styles.headerTitle}>파도 브리핑</Text>
           </View>
-          <View style={styles.timeBadge}>
-            <View style={styles.liveDot} />
-            <Text style={styles.timeText}>{timeStr}</Text>
+          <View style={styles.headerRight}>
+            <View style={styles.timeBadge}>
+              <View style={styles.liveDot} />
+              <Text style={styles.timeText}>{timeStr}</Text>
+            </View>
+            <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+              <LogOut size={16} color={Colors.textSubtle} />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -205,6 +226,8 @@ const styles = StyleSheet.create({
   header:       { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 22 },
   headerSub:    { color: Colors.textMuted, fontSize: 13, fontWeight: "600", marginBottom: 4 },
   headerTitle:  { color: Colors.text, fontSize: 26, fontWeight: "800" },
+  headerRight:  { alignItems: "flex-end", gap: 8 },
+  logoutBtn:    { padding: 4 },
   timeBadge:    { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.bgCard, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: Colors.border },
   liveDot:      { width: 7, height: 7, borderRadius: 3.5, backgroundColor: Colors.success },
   timeText:     { color: Colors.textMuted, fontSize: 12, fontWeight: "700" },
