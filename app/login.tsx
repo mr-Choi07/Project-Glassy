@@ -1,21 +1,125 @@
+import { Colors } from "@/constants/theme";
+import { useAuth } from "@/context/AuthContext";
 import { FontAwesome } from "@expo/vector-icons";
+import * as Google from "expo-auth-session/providers/google";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import * as WebBrowser from "expo-web-browser";
+import React, { useEffect, useState } from "react";
 import {
-  KeyboardAvoidingView, Platform, ScrollView,
-  StyleSheet, Text, TextInput, TouchableOpacity, View,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Colors } from "@/constants/theme";
+
+WebBrowser.maybeCompleteAuthSession();
+
+// Firebase Console → Authentication → Sign-in method → Google → Web SDK configuration → Web client ID
+// 예: "557420012496-xxxxxxxxxxxx.apps.googleusercontent.com"
+const GOOGLE_WEB_CLIENT_ID = "621951191738-i394sbngqukd6fqjo10chmsrh4qkk0lm.apps.googleusercontent.com";
+
+const FIREBASE_ERRORS: Record<string, string> = {
+  "auth/invalid-email": "이메일 형식이 올바르지 않습니다.",
+  "auth/user-not-found": "등록되지 않은 이메일입니다.",
+  "auth/wrong-password": "비밀번호가 올바르지 않습니다.",
+  "auth/invalid-credential": "이메일 또는 비밀번호가 올바르지 않습니다.",
+  "auth/too-many-requests": "너무 많은 시도입니다. 잠시 후 다시 시도해주세요.",
+  "auth/user-disabled": "비활성화된 계정입니다.",
+  "auth/network-request-failed": "네트워크 오류가 발생했습니다.",
+};
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { login, resetPassword, loginWithGoogleToken } = useAuth();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [emailFocus, setEmailFocus] = useState(false);
   const [pwFocus, setPwFocus] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleLogin = () => router.replace({ pathname: "/" });
+  const [, googleResponse, googlePromptAsync] = Google.useIdTokenAuthRequest({
+    webClientId: GOOGLE_WEB_CLIENT_ID || undefined,
+    iosClientId: GOOGLE_WEB_CLIENT_ID || undefined,
+    androidClientId: GOOGLE_WEB_CLIENT_ID || undefined,
+  });
+
+  useEffect(() => {
+    if (googleResponse?.type === "success") {
+      const idToken = googleResponse.params?.id_token;
+      if (idToken) {
+        handleGoogleSignIn(idToken);
+      }
+    }
+  }, [googleResponse]);
+
+  const handleGoogleSignIn = async (idToken: string) => {
+    setLoading(true);
+    setError("");
+    try {
+      await loginWithGoogleToken(idToken);
+      router.replace("/(tabs)");
+    } catch (e: any) {
+      setError(`Google 오류: ${e.code ?? e.message ?? String(e)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    if (!GOOGLE_WEB_CLIENT_ID) {
+      Alert.alert(
+        "Google 로그인 설정 필요",
+        "Firebase Console → Authentication → Sign-in method → Google 활성화 후\nWeb Client ID를 login.tsx의 GOOGLE_WEB_CLIENT_ID에 입력해주세요.",
+      );
+      return;
+    }
+    await googlePromptAsync();
+  };
+
+  const handleLogin = async () => {
+    if (!email || !password) {
+      setError("이메일과 비밀번호를 입력해주세요.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      await login(email, password);
+      router.replace("/(tabs)");
+    } catch (e: any) {
+      setError(FIREBASE_ERRORS[e.code] ?? "로그인에 실패했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = () => {
+    Alert.prompt(
+      "비밀번호 재설정",
+      "가입한 이메일을 입력하면 재설정 링크를 보내드립니다.",
+      async (inputEmail) => {
+        if (!inputEmail) return;
+        try {
+          await resetPassword(inputEmail.trim());
+          Alert.alert("전송 완료", `${inputEmail}로 재설정 링크를 전송했습니다.`);
+        } catch {
+          Alert.alert("오류", "이메일을 확인해주세요.");
+        }
+      },
+      "plain-text",
+      email,
+      "email-address",
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -58,7 +162,9 @@ export default function LoginScreen() {
             <View style={styles.inputGroup}>
               <View style={styles.labelRow}>
                 <Text style={styles.label}>비밀번호</Text>
-                <Text style={styles.forgotLink}>비밀번호 찾기</Text>
+                <TouchableOpacity onPress={handleForgotPassword}>
+                  <Text style={styles.forgotLink}>비밀번호 찾기</Text>
+                </TouchableOpacity>
               </View>
               <TextInput
                 style={[styles.input, pwFocus && styles.inputFocus]}
@@ -72,8 +178,17 @@ export default function LoginScreen() {
               />
             </View>
 
-            <TouchableOpacity style={styles.primaryBtn} onPress={handleLogin}>
-              <Text style={styles.primaryBtnText}>로그인</Text>
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+            <TouchableOpacity
+              style={[styles.primaryBtn, loading && styles.btnDisabled]}
+              onPress={handleLogin}
+              disabled={loading}
+            >
+              {loading
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={styles.primaryBtnText}>로그인</Text>
+              }
             </TouchableOpacity>
 
             <View style={styles.dividerRow}>
@@ -83,7 +198,7 @@ export default function LoginScreen() {
             </View>
 
             <View style={styles.socialRow}>
-              <TouchableOpacity style={styles.socialBtn}>
+              <TouchableOpacity style={styles.socialBtn} onPress={handleGoogleLogin}>
                 <FontAwesome name="google" size={17} color="#EA4335" />
                 <Text style={styles.socialBtnText}>Google</Text>
               </TouchableOpacity>
@@ -149,10 +264,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, color: Colors.text, fontSize: 15,
   },
   inputFocus: { borderColor: Colors.borderFocus },
+  errorText: { color: Colors.error, fontSize: 13, marginBottom: 12 },
   primaryBtn: {
     height: 54, borderRadius: 16, backgroundColor: Colors.primary,
     alignItems: "center", justifyContent: "center", marginTop: 4,
   },
+  btnDisabled: { opacity: 0.6 },
   primaryBtnText: { color: "#fff", fontSize: 16, fontWeight: "800" },
   dividerRow: { flexDirection: "row", alignItems: "center", gap: 12, marginVertical: 20 },
   dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },

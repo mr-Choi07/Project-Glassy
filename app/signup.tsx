@@ -1,32 +1,112 @@
+import { Colors } from "@/constants/theme";
+import { useAuth } from "@/context/AuthContext";
 import { FontAwesome } from "@expo/vector-icons";
+import * as Google from "expo-auth-session/providers/google";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import * as WebBrowser from "expo-web-browser";
+import React, { useEffect, useState } from "react";
 import {
-  KeyboardAvoidingView, Platform, ScrollView,
-  StyleSheet, Text, TextInput, TouchableOpacity, View,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Colors } from "@/constants/theme";
+
+WebBrowser.maybeCompleteAuthSession();
+
+// login.tsx의 GOOGLE_WEB_CLIENT_ID와 동일한 값을 입력하세요
+const GOOGLE_WEB_CLIENT_ID = "621951191738-i394sbngqukd6fqjo10chmsrh4qkk0lm.apps.googleusercontent.com";
+
+const FIREBASE_ERRORS: Record<string, string> = {
+  "auth/email-already-in-use": "이미 사용 중인 이메일입니다.",
+  "auth/invalid-email": "이메일 형식이 올바르지 않습니다.",
+  "auth/weak-password": "비밀번호는 6자 이상이어야 합니다.",
+  "auth/network-request-failed": "네트워크 오류가 발생했습니다.",
+};
 
 export default function SignupScreen() {
   const router = useRouter();
+  const { signup, loginWithGoogleToken } = useAuth();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [phone, setPhone] = useState("");
-  const [verificationCode, setVerificationCode] = useState("");
-  const [codeSent, setCodeSent] = useState(false);
+  const [displayName, setDisplayName] = useState("");
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const sendVerification = () => {
-    if (!phone) { setError("전화번호를 입력해주세요."); return; }
-    setError(""); setCodeSent(true);
+  const [, googleResponse, googlePromptAsync] = Google.useIdTokenAuthRequest({
+    webClientId: GOOGLE_WEB_CLIENT_ID || undefined,
+    iosClientId: GOOGLE_WEB_CLIENT_ID || undefined,
+    androidClientId: GOOGLE_WEB_CLIENT_ID || undefined,
+  });
+
+  useEffect(() => {
+    if (googleResponse?.type === "success") {
+      const idToken = googleResponse.params?.id_token;
+      if (idToken) {
+        handleGoogleSignIn(idToken);
+      }
+    }
+  }, [googleResponse]);
+
+  const handleGoogleSignIn = async (idToken: string) => {
+    setLoading(true);
+    setError("");
+    try {
+      await loginWithGoogleToken(idToken);
+      router.replace("/(tabs)");
+    } catch {
+      setError("Google 로그인에 실패했습니다.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSignup = () => {
-    if (password !== confirmPassword) { setError("비밀번호가 일치하지 않습니다."); return; }
-    setError(""); router.replace({ pathname: "/" });
+  const handleGoogleLogin = async () => {
+    if (!GOOGLE_WEB_CLIENT_ID) {
+      Alert.alert(
+        "Google 로그인 설정 필요",
+        "Firebase Console → Authentication → Sign-in method → Google 활성화 후\nWeb Client ID를 signup.tsx의 GOOGLE_WEB_CLIENT_ID에 입력해주세요.",
+      );
+      return;
+    }
+    await googlePromptAsync();
   };
+
+  const handleSignup = async () => {
+    if (!email || !password || !confirmPassword) {
+      setError("모든 항목을 입력해주세요.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("비밀번호가 일치하지 않습니다.");
+      return;
+    }
+    if (password.length < 6) {
+      setError("비밀번호는 6자 이상이어야 합니다.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      await signup(email.trim(), password, displayName.trim() || undefined);
+      router.replace("/(tabs)");
+    } catch (e: any) {
+      setError(FIREBASE_ERRORS[e.code] ?? "회원가입에 실패했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const pwMismatch = confirmPassword.length > 0 && password !== confirmPassword;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -72,13 +152,27 @@ export default function SignupScreen() {
             <Text style={styles.cardMeta}>필수 항목만 먼저 입력합니다.</Text>
 
             <View style={styles.inputGroup}>
+              <Text style={styles.label}>닉네임 (선택)</Text>
+              <TextInput
+                style={styles.input}
+                value={displayName}
+                onChangeText={setDisplayName}
+                placeholder="서퍼 닉네임"
+                placeholderTextColor={Colors.textSubtle}
+                autoCapitalize="none"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
               <Text style={styles.label}>이메일</Text>
               <TextInput
                 style={styles.input}
-                value={email} onChangeText={setEmail}
+                value={email}
+                onChangeText={setEmail}
                 placeholder="example@mail.com"
                 placeholderTextColor={Colors.textSubtle}
-                keyboardType="email-address" autoCapitalize="none"
+                keyboardType="email-address"
+                autoCapitalize="none"
               />
             </View>
 
@@ -86,8 +180,9 @@ export default function SignupScreen() {
               <Text style={styles.label}>비밀번호</Text>
               <TextInput
                 style={styles.input}
-                value={password} onChangeText={setPassword}
-                placeholder="••••••••"
+                value={password}
+                onChangeText={setPassword}
+                placeholder="6자 이상"
                 placeholderTextColor={Colors.textSubtle}
                 secureTextEntry
               />
@@ -96,47 +191,29 @@ export default function SignupScreen() {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>비밀번호 확인</Text>
               <TextInput
-                style={[styles.input, confirmPassword.length > 0 && password !== confirmPassword && styles.inputError]}
-                value={confirmPassword} onChangeText={setConfirmPassword}
+                style={[styles.input, pwMismatch && styles.inputError]}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
                 placeholder="••••••••"
                 placeholderTextColor={Colors.textSubtle}
                 secureTextEntry
               />
+              {pwMismatch && (
+                <Text style={styles.inlineError}>비밀번호가 일치하지 않습니다.</Text>
+              )}
             </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>전화번호</Text>
-              <View style={styles.phoneRow}>
-                <TextInput
-                  style={[styles.input, styles.phoneInput]}
-                  value={phone} onChangeText={setPhone}
-                  placeholder="010-1234-5678"
-                  placeholderTextColor={Colors.textSubtle}
-                  keyboardType="phone-pad"
-                />
-                <TouchableOpacity style={styles.verifyBtn} onPress={sendVerification}>
-                  <Text style={styles.verifyBtnText}>인증</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {codeSent && (
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>인증번호</Text>
-                <TextInput
-                  style={styles.input}
-                  value={verificationCode} onChangeText={setVerificationCode}
-                  placeholder="123456"
-                  placeholderTextColor={Colors.textSubtle}
-                  keyboardType="number-pad"
-                />
-              </View>
-            )}
 
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-            <TouchableOpacity style={styles.primaryBtn} onPress={handleSignup}>
-              <Text style={styles.primaryBtnText}>회원가입</Text>
+            <TouchableOpacity
+              style={[styles.primaryBtn, loading && styles.btnDisabled]}
+              onPress={handleSignup}
+              disabled={loading}
+            >
+              {loading
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={styles.primaryBtnText}>회원가입</Text>
+              }
             </TouchableOpacity>
 
             <View style={styles.dividerRow}>
@@ -146,7 +223,7 @@ export default function SignupScreen() {
             </View>
 
             <View style={styles.socialRow}>
-              <TouchableOpacity style={styles.socialBtn}>
+              <TouchableOpacity style={styles.socialBtn} onPress={handleGoogleLogin}>
                 <FontAwesome name="google" size={17} color="#EA4335" />
                 <Text style={styles.socialBtnText}>Google</Text>
               </TouchableOpacity>
@@ -218,15 +295,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, color: Colors.text, fontSize: 15,
   },
   inputError: { borderColor: Colors.error },
-  phoneRow: { flexDirection: "row", gap: 8 },
-  phoneInput: { flex: 1 },
-  verifyBtn: {
-    minWidth: 74, height: 52, borderRadius: 14,
-    backgroundColor: Colors.bgSurface, borderWidth: 1,
-    borderColor: Colors.primary, alignItems: "center", justifyContent: "center",
-  },
-  verifyBtnText: { color: Colors.primary, fontSize: 14, fontWeight: "700" },
+  inlineError: { color: Colors.error, fontSize: 12, marginTop: 4 },
   errorText: { color: Colors.error, fontSize: 13, marginBottom: 12 },
+  btnDisabled: { opacity: 0.6 },
   primaryBtn: {
     height: 54, borderRadius: 16, backgroundColor: Colors.primary,
     alignItems: "center", justifyContent: "center", marginTop: 4,
