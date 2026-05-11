@@ -1,5 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: "REDACTED_FIREBASE_KEY",
@@ -12,7 +14,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
-// 웹: Firebase가 IndexedDB/localStorage로 알아서 세션 유지
 export const auth = getAuth(app);
-
+export const db = getFirestore(app);
+export const storage = getStorage(app);
 export default app;
