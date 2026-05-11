@@ -37,7 +37,7 @@ const FIREBASE_ERRORS: Record<string, string> = {
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { login, resetPassword, loginWithGoogleToken } = useAuth();
+  const { login, resetPassword, loginWithGoogleToken, loginWithGooglePopup } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -75,14 +75,26 @@ export default function LoginScreen() {
   };
 
   const handleGoogleLogin = async () => {
-    if (!GOOGLE_WEB_CLIENT_ID) {
-      Alert.alert(
-        "Google 로그인 설정 필요",
-        "Firebase Console → Authentication → Sign-in method → Google 활성화 후\nWeb Client ID를 login.tsx의 GOOGLE_WEB_CLIENT_ID에 입력해주세요.",
-      );
-      return;
+    setLoading(true);
+    setError("");
+    try {
+      if (Platform.OS === "web") {
+        // 웹: Firebase 내장 팝업 (CORS/OAuth 설정 불필요)
+        await loginWithGooglePopup();
+        router.replace("/(tabs)");
+      } else {
+        // 네이티브: expo-auth-session
+        if (!GOOGLE_WEB_CLIENT_ID) {
+          Alert.alert("Google 로그인 설정 필요", "GOOGLE_WEB_CLIENT_ID를 입력해주세요.");
+          return;
+        }
+        await googlePromptAsync();
+      }
+    } catch (e: any) {
+      setError(`Google 오류: ${e.code ?? e.message ?? String(e)}`);
+    } finally {
+      setLoading(false);
     }
-    await googlePromptAsync();
   };
 
   const handleLogin = async () => {

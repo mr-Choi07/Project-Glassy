@@ -21,8 +21,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 WebBrowser.maybeCompleteAuthSession();
 
-// login.tsx의 GOOGLE_WEB_CLIENT_ID와 동일한 값을 입력하세요
-const GOOGLE_WEB_CLIENT_ID = "621951191738-i394sbngqukd6fqjo10chmsrh4qkk0lm.apps.googleusercontent.com";
+const GOOGLE_WEB_CLIENT_ID =
+  "621951191738-i394sbngqukd6fqjo10chmsrh4qkk0lm.apps.googleusercontent.com";
 
 const FIREBASE_ERRORS: Record<string, string> = {
   "auth/email-already-in-use": "이미 사용 중인 이메일입니다.",
@@ -33,14 +33,15 @@ const FIREBASE_ERRORS: Record<string, string> = {
 
 export default function SignupScreen() {
   const router = useRouter();
-  const { signup, loginWithGoogleToken } = useAuth();
+  const { signup, loginWithGoogleToken, loginWithGooglePopup } = useAuth();
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [displayName, setDisplayName]         = useState("");
+  const [email, setEmail]                     = useState("");
+  const [password, setPassword]               = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [phone, setPhone]                     = useState("");
+  const [loading, setLoading]                 = useState(false);
+  const [error, setError]                     = useState("");
 
   const [, googleResponse, googlePromptAsync] = Google.useIdTokenAuthRequest({
     webClientId: GOOGLE_WEB_CLIENT_ID || undefined,
@@ -51,9 +52,7 @@ export default function SignupScreen() {
   useEffect(() => {
     if (googleResponse?.type === "success") {
       const idToken = googleResponse.params?.id_token;
-      if (idToken) {
-        handleGoogleSignIn(idToken);
-      }
+      if (idToken) handleGoogleSignIn(idToken);
     }
   }, [googleResponse]);
 
@@ -71,33 +70,37 @@ export default function SignupScreen() {
   };
 
   const handleGoogleLogin = async () => {
-    if (!GOOGLE_WEB_CLIENT_ID) {
-      Alert.alert(
-        "Google 로그인 설정 필요",
-        "Firebase Console → Authentication → Sign-in method → Google 활성화 후\nWeb Client ID를 signup.tsx의 GOOGLE_WEB_CLIENT_ID에 입력해주세요.",
-      );
-      return;
-    }
-    await googlePromptAsync();
-  };
-
-  const handleSignup = async () => {
-    if (!email || !password || !confirmPassword) {
-      setError("모든 항목을 입력해주세요.");
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError("비밀번호가 일치하지 않습니다.");
-      return;
-    }
-    if (password.length < 6) {
-      setError("비밀번호는 6자 이상이어야 합니다.");
-      return;
-    }
     setLoading(true);
     setError("");
     try {
-      await signup(email.trim(), password, displayName.trim() || undefined);
+      if (Platform.OS === "web") {
+        await loginWithGooglePopup();
+        router.replace("/(tabs)");
+      } else {
+        if (!GOOGLE_WEB_CLIENT_ID) {
+          Alert.alert("Google 로그인 설정 필요", "GOOGLE_WEB_CLIENT_ID를 입력해주세요.");
+          return;
+        }
+        await googlePromptAsync();
+      }
+    } catch (e: any) {
+      setError(`Google 오류: ${e.code ?? e.message ?? String(e)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSignup = async () => {
+    if (!displayName.trim()) { setError("닉네임을 입력해주세요."); return; }
+    if (!email.trim()) { setError("이메일을 입력해주세요."); return; }
+    if (!password) { setError("비밀번호를 입력해주세요."); return; }
+    if (password !== confirmPassword) { setError("비밀번호가 일치하지 않습니다."); return; }
+    if (password.length < 6) { setError("비밀번호는 6자 이상이어야 합니다."); return; }
+
+    setLoading(true);
+    setError("");
+    try {
+      await signup(email.trim(), password, displayName.trim(), phone.trim());
       router.replace("/(tabs)");
     } catch (e: any) {
       setError(FIREBASE_ERRORS[e.code] ?? "회원가입에 실패했습니다.");
@@ -149,10 +152,10 @@ export default function SignupScreen() {
           {/* Form card */}
           <View style={styles.card}>
             <Text style={styles.cardTitle}>기본 정보 입력</Text>
-            <Text style={styles.cardMeta}>필수 항목만 먼저 입력합니다.</Text>
+            <Text style={styles.cardMeta}>모든 항목을 입력해주세요.</Text>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>닉네임 (선택)</Text>
+              <Text style={styles.label}>닉네임 <Text style={styles.required}>*</Text></Text>
               <TextInput
                 style={styles.input}
                 value={displayName}
@@ -164,7 +167,7 @@ export default function SignupScreen() {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>이메일</Text>
+              <Text style={styles.label}>이메일 <Text style={styles.required}>*</Text></Text>
               <TextInput
                 style={styles.input}
                 value={email}
@@ -177,7 +180,7 @@ export default function SignupScreen() {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>비밀번호</Text>
+              <Text style={styles.label}>비밀번호 <Text style={styles.required}>*</Text></Text>
               <TextInput
                 style={styles.input}
                 value={password}
@@ -189,7 +192,7 @@ export default function SignupScreen() {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>비밀번호 확인</Text>
+              <Text style={styles.label}>비밀번호 확인 <Text style={styles.required}>*</Text></Text>
               <TextInput
                 style={[styles.input, pwMismatch && styles.inputError]}
                 value={confirmPassword}
@@ -201,6 +204,18 @@ export default function SignupScreen() {
               {pwMismatch && (
                 <Text style={styles.inlineError}>비밀번호가 일치하지 않습니다.</Text>
               )}
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>전화번호 (선택)</Text>
+              <TextInput
+                style={styles.input}
+                value={phone}
+                onChangeText={setPhone}
+                placeholder="010-1234-5678"
+                placeholderTextColor={Colors.textSubtle}
+                keyboardType="phone-pad"
+              />
             </View>
 
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -251,71 +266,38 @@ export default function SignupScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: Colors.bg },
   flex: { flex: 1 },
-  orbTR: {
-    position: "absolute", top: -60, right: -50,
-    width: 200, height: 200, borderRadius: 100,
-    backgroundColor: "rgba(6,182,212,0.1)",
-  },
-  orbBL: {
-    position: "absolute", bottom: -80, left: -60,
-    width: 180, height: 180, borderRadius: 90,
-    backgroundColor: "rgba(14,165,233,0.07)",
-  },
+  orbTR: { position: "absolute", top: -60, right: -50, width: 200, height: 200, borderRadius: 100, backgroundColor: "rgba(6,182,212,0.1)" },
+  orbBL: { position: "absolute", bottom: -80, left: -60, width: 180, height: 180, borderRadius: 90, backgroundColor: "rgba(14,165,233,0.07)" },
   content: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 28 },
   header: { marginBottom: 24 },
-  brand: {
-    color: Colors.primary, fontSize: 15, fontWeight: "800",
-    letterSpacing: 0.5, marginBottom: 20,
-  },
-  title: {
-    color: Colors.text, fontSize: 32, fontWeight: "800",
-    lineHeight: 40, marginBottom: 10,
-  },
+  brand: { color: Colors.primary, fontSize: 15, fontWeight: "800", letterSpacing: 0.5, marginBottom: 20 },
+  title: { color: Colors.text, fontSize: 32, fontWeight: "800", lineHeight: 40, marginBottom: 10 },
   description: { color: Colors.textMuted, fontSize: 15, lineHeight: 22, marginBottom: 18 },
-  statsRow: {
-    flexDirection: "row", alignItems: "center",
-    backgroundColor: Colors.bgCard, borderRadius: 18, padding: 16,
-    borderWidth: 1, borderColor: Colors.border,
-  },
+  statsRow: { flexDirection: "row", alignItems: "center", backgroundColor: Colors.bgCard, borderRadius: 18, padding: 16, borderWidth: 1, borderColor: Colors.border },
   statItem: { flex: 1, alignItems: "center" },
   statValue: { color: Colors.text, fontSize: 16, fontWeight: "800", marginBottom: 3 },
   statLabel: { color: Colors.textSubtle, fontSize: 12 },
   statDivider: { width: 1, height: 32, backgroundColor: Colors.border },
-  card: {
-    backgroundColor: Colors.bgCard, borderRadius: 24, padding: 22,
-    borderWidth: 1, borderColor: Colors.border, marginBottom: 24,
-  },
+  card: { backgroundColor: Colors.bgCard, borderRadius: 24, padding: 22, borderWidth: 1, borderColor: Colors.border, marginBottom: 24 },
   cardTitle: { color: Colors.text, fontSize: 17, fontWeight: "700", marginBottom: 4 },
   cardMeta: { color: Colors.textMuted, fontSize: 13, marginBottom: 20 },
   inputGroup: { marginBottom: 14 },
   label: { color: Colors.textMuted, fontSize: 13, fontWeight: "600", marginBottom: 8 },
-  input: {
-    height: 52, borderRadius: 14, borderWidth: 1,
-    borderColor: Colors.border, backgroundColor: Colors.bgSurface,
-    paddingHorizontal: 16, color: Colors.text, fontSize: 15,
-  },
+  required: { color: Colors.error },
+  input: { height: 52, borderRadius: 14, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bgSurface, paddingHorizontal: 16, color: Colors.text, fontSize: 15 },
   inputError: { borderColor: Colors.error },
   inlineError: { color: Colors.error, fontSize: 12, marginTop: 4 },
   errorText: { color: Colors.error, fontSize: 13, marginBottom: 12 },
-  btnDisabled: { opacity: 0.6 },
-  primaryBtn: {
-    height: 54, borderRadius: 16, backgroundColor: Colors.primary,
-    alignItems: "center", justifyContent: "center", marginTop: 4,
-  },
+  btnDisabled: { opacity: 0.5 },
+  primaryBtn: { height: 54, borderRadius: 16, backgroundColor: Colors.primary, alignItems: "center", justifyContent: "center", marginTop: 4 },
   primaryBtnText: { color: "#fff", fontSize: 16, fontWeight: "800" },
   dividerRow: { flexDirection: "row", alignItems: "center", gap: 12, marginVertical: 20 },
   dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
   dividerText: { color: Colors.textSubtle, fontSize: 12, fontWeight: "600" },
   socialRow: { flexDirection: "row", gap: 10 },
-  socialBtn: {
-    flex: 1, height: 50, borderRadius: 14, borderWidth: 1,
-    borderColor: Colors.border, backgroundColor: Colors.bgSurface,
-    alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8,
-  },
+  socialBtn: { flex: 1, height: 50, borderRadius: 14, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bgSurface, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8 },
   socialBtnText: { color: Colors.text, fontSize: 14, fontWeight: "600" },
-  footerRow: {
-    flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6,
-  },
+  footerRow: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6 },
   footerText: { color: Colors.textMuted, fontSize: 14 },
   footerLink: { color: Colors.primary, fontSize: 14, fontWeight: "700" },
 });
