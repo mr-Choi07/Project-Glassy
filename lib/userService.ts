@@ -2,7 +2,7 @@ import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
 
-export type SpotId = "songjeong" | "dadaepo";
+export type SpotId = "songjeong" | "haeundae" | "dadaepo" | "gwanganri";
 
 export interface UserProfile {
   uid: string;

@@ -45,8 +45,10 @@ const SURF_TIPS = [
 ];
 
 const ALL_SPOTS = [
-  { id: "songjeong", name: "송정",  lat: 35.1786, lon: 129.2075, area: "남해동부앞바다", emoji: "🐚" },
+  { id: "songjeong", name: "송정",   lat: 35.1786, lon: 129.2075, area: "남해동부앞바다", emoji: "🐚" },
+  { id: "haeundae",  name: "해운대", lat: 35.1588, lon: 129.1604, area: "남해동부앞바다", emoji: "🏖️" },
   { id: "dadaepo",   name: "다대포", lat: 35.0476, lon: 128.9610, area: "남해동부앞바다", emoji: "🌊" },
+  { id: "gwanganri", name: "광안리", lat: 35.1530, lon: 129.1185, area: "남해동부앞바다", emoji: "🌉" },
 ] as const;
 
 type Spot = typeof ALL_SPOTS[number];
@@ -100,7 +102,7 @@ export default function HomeScreen() {
     async (spot: Spot = selectedSpot, forceRefresh = false) => {
       setLoading(true);
       try {
-        const cacheKey = `surf_v2_${spot.id}`;
+        const cacheKey = `surf_v8_${spot.id}`;
         const cached = await AsyncStorage.getItem(cacheKey);
         if (cached && !forceRefresh) {
           const { content, height, period, warning, timestamp } = JSON.parse(cached);
@@ -134,10 +136,20 @@ export default function HomeScreen() {
         } catch (_) {}
         setWarningStatus(warning);
 
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-        const result = await model.generateContent(
-          `지역: ${spot.name}, 파고: ${height}m, 주기: ${period}초, 특보: ${warning}. 너는 전문 서핑 코치야. 서퍼 말투로 딱 한 줄만 브리핑해줘. 🤙`,
-        );
+        const model = genAI.getGenerativeModel({
+          model: "gemini-3.1-flash-lite",
+          generationConfig: { maxOutputTokens: 300 },
+        });
+        const result = await model.generateContent({
+          contents: [{ role: "user", parts: [{ text:
+            `아래 예시처럼 딱 한 줄만 출력해. 다른 말 없이.\n\n` +
+            `파고0.2m 파주기5s → 오늘의 송정파도는 발목~무릎, 슈트 3mm추천, 롱보드 입문 연습 좋음\n` +
+            `파고0.6m 파주기8s → 오늘의 송정파도는 무릎~허리, 슈트 3mm추천, 롱보드·펀보드 재밌게 타기 좋음\n` +
+            `파고1.2m 파주기10s → 오늘의 송정파도는 허리~가슴, 슈트 3mm추천, 숏보드 실력 향상 좋음\n` +
+            `파고1.8m 파주기12s → 오늘의 송정파도는 가슴~머리, 슈트 3mm추천, 숏보드 고수만 출격\n\n` +
+            `파고${height}m 파주기${period}s 특보:${warning} 스팟:${spot.name} →`,
+          }] }],
+        });
         const briefingText = result.response.text().trim();
 
         setSurfBriefing(briefingText);
@@ -145,7 +157,7 @@ export default function HomeScreen() {
         setWavePeriod(period);
         await AsyncStorage.setItem(cacheKey, JSON.stringify({ content: briefingText, height, period, warning, timestamp: Date.now() }));
       } catch (err: any) {
-        setSurfBriefing(`분석 실패: ${err.message?.substring(0, 40)}`);
+        setSurfBriefing(`분석 실패: ${err.message ?? String(err)}`);
       } finally {
         setLoading(false);
         setRefreshing(false);

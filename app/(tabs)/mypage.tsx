@@ -31,8 +31,10 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const SURF_SPOTS: { id: SpotId; name: string; emoji: string }[] = [
-  { id: "songjeong", name: "송정", emoji: "🐚" },
+  { id: "songjeong", name: "송정",   emoji: "🐚" },
+  { id: "haeundae",  name: "해운대", emoji: "🏖️" },
   { id: "dadaepo",   name: "다대포", emoji: "🌊" },
+  { id: "gwanganri", name: "광안리", emoji: "🌉" },
 ];
 
 type ModalType = "nickname" | "email" | "phone" | "delete" | null;
