@@ -48,12 +48,16 @@ const SPOTS = [
 function MapEmbed({ lat, lon, name }: { lat: number; lon: number; name: string }) {
   const src = `https://www.openstreetmap.org/export/embed.html?bbox=${lon - 0.02}%2C${lat - 0.02}%2C${lon + 0.02}%2C${lat + 0.02}&layer=mapnik&marker=${lat}%2C${lon}`;
   if (Platform.OS === "web") {
-    return createElement("iframe", {
-      src,
-      style: { width: "100%", height: 170, border: "none", borderRadius: 14, marginTop: 4 },
-      loading: "lazy",
-      title: `${name} 지도`,
-    });
+    return createElement(
+      "div",
+      { style: { height: 160, overflow: "hidden", borderRadius: 14, border: `1px solid ${Colors.border}`, marginTop: 4 } },
+      createElement("iframe", {
+        src,
+        style: { width: "100%", height: 192, border: "none" },
+        loading: "lazy",
+        title: `${name} 지도`,
+      })
+    );
   }
   return (
     <View style={mapStyles.nativeBox}>

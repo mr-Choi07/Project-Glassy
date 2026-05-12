@@ -8,8 +8,7 @@ import {
 } from "react-native";
 import { Colors } from "@/constants/theme";
 
-const API_KEY = "REMOVED_KEY";
-const genAI = new GoogleGenerativeAI(API_KEY);
+const genAI = new GoogleGenerativeAI(process.env.EXPO_PUBLIC_GEMINI_API_KEY!);
 
 type Message = { id: string; text: string; sender: "user" | "bot" };
 const uid = (p: string) => `${p}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -112,7 +111,7 @@ export default function AIChatScreen() {
         <View style={styles.footer}>
           <View style={styles.inputRow}>
             <TextInput
-              style={styles.input}
+              style={[styles.input, Platform.OS === "web" && { resize: "none" } as any]}
               value={inputText}
               onChangeText={setInputText}
               placeholder="오늘 파도 어때요?"
