@@ -18,9 +18,31 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { Colors } from "@/constants/theme";
 
-const GEMINI_API_KEY = "REMOVED_KEY";
-const KMA_AUTH_KEY   = "PUcoXsS7SiSHKF7Eu3okRg";
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+const KMA_AUTH_KEY = process.env.EXPO_PUBLIC_KMA_AUTH_KEY!;
+const genAI = new GoogleGenerativeAI(process.env.EXPO_PUBLIC_GEMINI_API_KEY!);
+
+function calcMulttae(date: Date) {
+  const ref = new Date("2024-01-11T00:00:00Z").getTime();
+  const period = 29.53058867 * 24 * 3600 * 1000;
+  let phase = ((date.getTime() - ref) % period) / period;
+  if (phase < 0) phase += 1;
+  const ld = Math.floor(phase * 29.53) + 1;
+  const m = ld === 8 || ld === 23 ? 0 : ld > 8 && ld < 23 ? ld - 8 : ld > 23 ? ld - 23 : ld + 6;
+  const label = m === 0 ? "조금" : `${m}물`;
+  const desc = m === 0 ? "조류 가장 약함" : m <= 2 ? "약한 조류" : m <= 5 ? "조류 보통" : m <= 8 ? "조류 강함" : "조류 약해짐";
+  const color = m === 0 ? Colors.success : m <= 3 ? Colors.primary : m <= 6 ? "#EAB308" : "#F97316";
+  return { label, desc, color };
+}
+
+const SURF_TIPS = [
+  "초보는 무릎~허리 파도에서 연습하는 게 최고예요!",
+  "패들링은 허리를 살짝 들고 일정한 리듬으로!",
+  "파도 방향을 미리 읽고 위치를 선점하세요",
+  "임팩트존에서 벗어나 안전한 곳에서 휴식하세요",
+  "자외선 차단제는 귀 뒤와 발등까지 꼼꼼히!",
+  "팝업은 한 번에 빠르게! 천천히 일어나면 더 어려워요",
+  "서핑 전후 충분한 수분 섭취가 중요해요",
+];
 
 const ALL_SPOTS = [
   { id: "songjeong", name: "송정",  lat: 35.1786, lon: 129.2075, area: "남해동부앞바다", emoji: "🐚" },
@@ -160,6 +182,8 @@ export default function HomeScreen() {
 
   const condition = waveHeight !== null ? getCondition(waveHeight) : null;
   const timeStr   = new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+  const multtae   = useMemo(() => calcMulttae(new Date()), []);
+  const todayTip  = SURF_TIPS[new Date().getDay()];
   const noSpotSet = profileReady && (userProfile?.selectedSpotIds ?? []).length === 0;
 
   if (!profileReady) {
@@ -313,6 +337,36 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* 스팟 바로가기 */}
+        <Text style={styles.sectionLabel}>📍 스팟 바로가기</Text>
+        <View style={styles.spotGrid}>
+          {ALL_SPOTS.map(spot => (
+            <TouchableOpacity key={spot.id} style={styles.spotQuickCard} onPress={() => router.push(`/spot/${spot.id}` as any)}>
+              <Text style={styles.spotQuickEmoji}>{spot.emoji}</Text>
+              <Text style={styles.spotQuickName}>{spot.name}</Text>
+              <Text style={styles.spotQuickArrow}>상세보기 →</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* 물때 */}
+        <View style={styles.tidalCard}>
+          <View style={styles.tidalLeft}>
+            <Text style={styles.tidalIcon}>🌙</Text>
+            <View>
+              <Text style={styles.tidalSub}>오늘의 물때</Text>
+              <Text style={[styles.tidalLabel, { color: multtae.color }]}>{multtae.label}</Text>
+            </View>
+          </View>
+          <Text style={[styles.tidalDesc, { color: multtae.color }]}>{multtae.desc}</Text>
+        </View>
+
+        {/* 서핑 팁 */}
+        <View style={styles.tipCard}>
+          <Text style={styles.tipTitle}>💡 오늘의 서핑 팁</Text>
+          <Text style={styles.tipText}>{todayTip}</Text>
+        </View>
+
         <View style={{ height: 100 }} />
       </ScrollView>
     </SafeAreaView>
@@ -371,6 +425,24 @@ const styles = StyleSheet.create({
   statValue:   { color: Colors.text, fontSize: 24, fontWeight: "800", marginBottom: 4 },
   statLabel:   { color: Colors.textSubtle, fontSize: 12, fontWeight: "600" },
   statDivider: { width: 1, height: 36, backgroundColor: Colors.border },
+
+  sectionLabel:  { color: Colors.textMuted, fontSize: 13, fontWeight: "800", marginBottom: 10, marginTop: 6 },
+  spotGrid:      { flexDirection: "row", gap: 10, marginBottom: 14 },
+  spotQuickCard: { flex: 1, backgroundColor: Colors.bgCard, borderRadius: 18, padding: 18, borderWidth: 1, borderColor: Colors.border, gap: 6 },
+  spotQuickEmoji:{ fontSize: 22 },
+  spotQuickName: { color: Colors.text, fontSize: 15, fontWeight: "800" },
+  spotQuickArrow:{ color: Colors.primary, fontSize: 12, fontWeight: "700" },
+
+  tidalCard:  { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: Colors.bgCard, borderRadius: 18, padding: 18, borderWidth: 1, borderColor: Colors.border, marginBottom: 14 },
+  tidalLeft:  { flexDirection: "row", alignItems: "center", gap: 14 },
+  tidalIcon:  { fontSize: 28 },
+  tidalSub:   { color: Colors.textSubtle, fontSize: 11, fontWeight: "700", marginBottom: 3 },
+  tidalLabel: { fontSize: 20, fontWeight: "800" },
+  tidalDesc:  { fontSize: 13, fontWeight: "700" },
+
+  tipCard:  { backgroundColor: Colors.bgCard, borderRadius: 18, padding: 18, borderWidth: 1, borderColor: Colors.border, marginBottom: 14 },
+  tipTitle: { color: Colors.textMuted, fontSize: 12, fontWeight: "800", marginBottom: 8 },
+  tipText:  { color: Colors.text, fontSize: 15, lineHeight: 23, fontWeight: "600" },
 
   briefingCard:   { backgroundColor: Colors.bgCard, borderRadius: 24, padding: 22, borderWidth: 1, borderColor: Colors.border },
   briefingTop:    { marginBottom: 14 },
