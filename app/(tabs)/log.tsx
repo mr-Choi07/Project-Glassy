@@ -1,5 +1,6 @@
-import { Colors } from "@/constants/theme";
 import { useAuth } from "@/context/AuthContext";
+import { ThemeColors } from "@/constants/theme";
+import { useTheme } from "@/context/ThemeContext";
 import { db } from "@/lib/firebase";
 import {
   addDoc,
@@ -13,7 +14,7 @@ import {
   where,
 } from "firebase/firestore";
 import { Plus, Trash2, Waves } from "lucide-react-native";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -44,19 +45,19 @@ interface SurfLog {
 
 export default function LogScreen() {
   const { user } = useAuth();
+  const { colors: C } = useTheme();
+  const styles  = useMemo(() => makeStyles(C), [C]);
+  const mStyles = useMemo(() => makeMStyles(C), [C]);
 
-  const [logs, setLogs]         = useState<SurfLog[]>([]);
-  const [loading, setLoading]   = useState(true);
+  const [logs, setLogs]           = useState<SurfLog[]>([]);
+  const [loading, setLoading]     = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
-  const [saving, setSaving]     = useState(false);
-
-  // Form state
-  const [spotId, setSpotId]         = useState("songjeong");
+  const [saving, setSaving]       = useState(false);
+  const [spotId, setSpotId]       = useState("songjeong");
   const [waveHeight, setWaveHeight] = useState("");
-  const [duration, setDuration]     = useState("");
-  const [notes, setNotes]           = useState("");
+  const [duration, setDuration]   = useState("");
+  const [notes, setNotes]         = useState("");
 
-  // Real-time listener
   useEffect(() => {
     if (!user) return;
     const q = query(
@@ -123,11 +124,11 @@ export default function LogScreen() {
   };
 
   function getConditionLabel(h: number) {
-    if (h < 0.5) return { label: "FLAT",   color: Colors.textSubtle };
-    if (h < 1.0) return { label: "SMALL",  color: Colors.textMuted };
-    if (h < 1.8) return { label: "GOOD",   color: Colors.primary };
-    if (h < 2.5) return { label: "SOLID",  color: Colors.accent };
-    return              { label: "EPIC",   color: Colors.warning };
+    if (h < 0.5) return { label: "FLAT",  color: C.textSubtle };
+    if (h < 1.0) return { label: "SMALL", color: C.textMuted };
+    if (h < 1.8) return { label: "GOOD",  color: C.primary };
+    if (h < 2.5) return { label: "SOLID", color: C.accent };
+    return              { label: "EPIC",  color: C.warning };
   }
 
   const spotMeta = (id: string) => SURF_SPOTS.find(s => s.id === id) ?? SURF_SPOTS[0];
@@ -146,11 +147,11 @@ export default function LogScreen() {
 
       {loading ? (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color={C.primary} />
         </View>
       ) : logs.length === 0 ? (
         <View style={styles.centered}>
-          <Waves size={48} color={Colors.textSubtle} strokeWidth={1.5} />
+          <Waves size={48} color={C.textSubtle} strokeWidth={1.5} />
           <Text style={styles.emptyTitle}>아직 기록이 없어요</Text>
           <Text style={styles.emptyDesc}>+ 버튼으로 첫 서핑 세션을 기록해보세요 🤙</Text>
           <TouchableOpacity style={styles.emptyBtn} onPress={openModal}>
@@ -177,11 +178,10 @@ export default function LogScreen() {
                       <Text style={[styles.condText, { color: cond.color }]}>{cond.label}</Text>
                     </View>
                     <TouchableOpacity onPress={() => handleDelete(log.id)} style={styles.deleteBtn}>
-                      <Trash2 size={14} color={Colors.error} />
+                      <Trash2 size={14} color={C.error} />
                     </TouchableOpacity>
                   </View>
                 </View>
-
                 <View style={styles.logStats}>
                   <View style={styles.logStat}>
                     <Text style={styles.logStatVal}>{log.waveHeight.toFixed(1)}m</Text>
@@ -193,7 +193,6 @@ export default function LogScreen() {
                     <Text style={styles.logStatLabel}>세션</Text>
                   </View>
                 </View>
-
                 {log.notes ? <Text style={styles.logNotes}>{log.notes}</Text> : null}
               </View>
             );
@@ -202,13 +201,11 @@ export default function LogScreen() {
         </ScrollView>
       )}
 
-      {/* Add log modal */}
       <Modal visible={modalOpen} transparent animationType="slide" onRequestClose={() => setModalOpen(false)}>
         <View style={mStyles.overlay}>
           <View style={mStyles.sheet}>
             <Text style={mStyles.title}>새 세션 기록</Text>
 
-            {/* Spot picker */}
             <Text style={mStyles.label}>스팟</Text>
             <View style={mStyles.spotRow}>
               {SURF_SPOTS.map(s => (
@@ -230,7 +227,7 @@ export default function LogScreen() {
               onChangeText={setWaveHeight}
               keyboardType="decimal-pad"
               placeholder="예: 1.2"
-              placeholderTextColor={Colors.textSubtle}
+              placeholderTextColor={C.textSubtle}
             />
 
             <Text style={mStyles.label}>세션 시간 (분)</Text>
@@ -240,7 +237,7 @@ export default function LogScreen() {
               onChangeText={setDuration}
               keyboardType="number-pad"
               placeholder="예: 90"
-              placeholderTextColor={Colors.textSubtle}
+              placeholderTextColor={C.textSubtle}
             />
 
             <Text style={mStyles.label}>메모 (선택)</Text>
@@ -250,7 +247,7 @@ export default function LogScreen() {
               onChangeText={setNotes}
               multiline
               placeholder="오늘 세션은 어떠셨나요?"
-              placeholderTextColor={Colors.textSubtle}
+              placeholderTextColor={C.textSubtle}
             />
 
             <View style={mStyles.btnRow}>
@@ -272,58 +269,62 @@ export default function LogScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea:   { flex: 1, backgroundColor: Colors.bg },
-  scroll:     { flex: 1 },
-  list:       { paddingHorizontal: 20 },
-  centered:   { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 40 },
+function makeStyles(C: ThemeColors) {
+  return StyleSheet.create({
+    safeArea:  { flex: 1, backgroundColor: C.bg },
+    scroll:    { flex: 1 },
+    list:      { paddingHorizontal: 20 },
+    centered:  { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 40 },
 
-  headerRow:   { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20 },
-  headerSub:   { color: Colors.textMuted, fontSize: 13, fontWeight: "600", marginBottom: 4 },
-  headerTitle: { color: Colors.text, fontSize: 26, fontWeight: "800" },
-  addBtn:      { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.primary, alignItems: "center", justifyContent: "center" },
+    headerRow:   { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20 },
+    headerSub:   { color: C.textMuted, fontSize: 13, fontWeight: "600", marginBottom: 4 },
+    headerTitle: { color: C.text, fontSize: 26, fontWeight: "800" },
+    addBtn:      { width: 44, height: 44, borderRadius: 22, backgroundColor: C.primary, alignItems: "center", justifyContent: "center" },
 
-  emptyTitle: { color: Colors.text, fontSize: 18, fontWeight: "700", marginTop: 8 },
-  emptyDesc:  { color: Colors.textMuted, fontSize: 14, textAlign: "center", lineHeight: 22 },
-  emptyBtn:   { marginTop: 8, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 16, backgroundColor: Colors.primary },
-  emptyBtnText:{ color: "#fff", fontSize: 15, fontWeight: "700" },
+    emptyTitle:  { color: C.text, fontSize: 18, fontWeight: "700", marginTop: 8 },
+    emptyDesc:   { color: C.textMuted, fontSize: 14, textAlign: "center", lineHeight: 22 },
+    emptyBtn:    { marginTop: 8, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 16, backgroundColor: C.primary },
+    emptyBtnText:{ color: "#fff", fontSize: 15, fontWeight: "700" },
 
-  logCard:     { backgroundColor: Colors.bgCard, borderRadius: 20, padding: 18, borderWidth: 1, borderColor: Colors.border, marginBottom: 12 },
-  logTop:      { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
-  logLeft:     { flexDirection: "row", alignItems: "center", gap: 12 },
-  logSpotEmoji:{ fontSize: 24 },
-  logSpotName: { color: Colors.text, fontSize: 16, fontWeight: "700" },
-  logDate:     { color: Colors.textMuted, fontSize: 12, marginTop: 2 },
-  logRight:    { flexDirection: "row", alignItems: "center", gap: 10 },
-  condBadge:   { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1.5 },
-  condText:    { fontSize: 11, fontWeight: "800", letterSpacing: 0.5 },
-  deleteBtn:   { padding: 4 },
+    logCard:     { backgroundColor: C.bgCard, borderRadius: 20, padding: 18, borderWidth: 1, borderColor: C.border, marginBottom: 12 },
+    logTop:      { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
+    logLeft:     { flexDirection: "row", alignItems: "center", gap: 12 },
+    logSpotEmoji:{ fontSize: 24 },
+    logSpotName: { color: C.text, fontSize: 16, fontWeight: "700" },
+    logDate:     { color: C.textMuted, fontSize: 12, marginTop: 2 },
+    logRight:    { flexDirection: "row", alignItems: "center", gap: 10 },
+    condBadge:   { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1.5 },
+    condText:    { fontSize: 11, fontWeight: "800", letterSpacing: 0.5 },
+    deleteBtn:   { padding: 4 },
 
-  logStats:    { flexDirection: "row", alignItems: "center", backgroundColor: Colors.bgSurface, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border },
-  logStat:     { flex: 1, alignItems: "center" },
-  logStatVal:  { color: Colors.text, fontSize: 20, fontWeight: "800", marginBottom: 2 },
-  logStatLabel:{ color: Colors.textSubtle, fontSize: 11, fontWeight: "600" },
-  logStatDiv:  { width: 1, height: 28, backgroundColor: Colors.border },
-  logNotes:    { color: Colors.textMuted, fontSize: 13, lineHeight: 20, marginTop: 12 },
-});
+    logStats:    { flexDirection: "row", alignItems: "center", backgroundColor: C.bgSurface, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: C.border },
+    logStat:     { flex: 1, alignItems: "center" },
+    logStatVal:  { color: C.text, fontSize: 20, fontWeight: "800", marginBottom: 2 },
+    logStatLabel:{ color: C.textSubtle, fontSize: 11, fontWeight: "600" },
+    logStatDiv:  { width: 1, height: 28, backgroundColor: C.border },
+    logNotes:    { color: C.textMuted, fontSize: 13, lineHeight: 20, marginTop: 12 },
+  });
+}
 
-const mStyles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
-  sheet:   { backgroundColor: Colors.bgCard, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 28, paddingBottom: 40, borderWidth: 1, borderColor: Colors.border },
-  title:   { color: Colors.text, fontSize: 20, fontWeight: "800", marginBottom: 20 },
-  label:   { color: Colors.textMuted, fontSize: 13, fontWeight: "600", marginBottom: 8, marginTop: 14 },
-  input:   { height: 50, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bgSurface, paddingHorizontal: 16, color: Colors.text, fontSize: 15 },
+function makeMStyles(C: ThemeColors) {
+  return StyleSheet.create({
+    overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
+    sheet:   { backgroundColor: C.bgCard, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 28, paddingBottom: 40, borderWidth: 1, borderColor: C.border },
+    title:   { color: C.text, fontSize: 20, fontWeight: "800", marginBottom: 20 },
+    label:   { color: C.textMuted, fontSize: 13, fontWeight: "600", marginBottom: 8, marginTop: 14 },
+    input:   { height: 50, borderRadius: 12, borderWidth: 1, borderColor: C.border, backgroundColor: C.bgSurface, paddingHorizontal: 16, color: C.text, fontSize: 15 },
 
-  spotRow:          { flexDirection: "row", gap: 10 },
-  spotChip:         { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 14, borderWidth: 1.5, borderColor: Colors.border, backgroundColor: Colors.bgSurface },
-  spotChipActive:   { borderColor: Colors.primary, backgroundColor: "rgba(14,165,233,0.12)" },
-  spotEmoji:        { fontSize: 16 },
-  spotName:         { color: Colors.textMuted, fontSize: 14, fontWeight: "700" },
-  spotNameActive:   { color: Colors.primary },
+    spotRow:       { flexDirection: "row", gap: 10 },
+    spotChip:      { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 14, borderWidth: 1.5, borderColor: C.border, backgroundColor: C.bgSurface },
+    spotChipActive:{ borderColor: C.primary, backgroundColor: "rgba(14,165,233,0.12)" },
+    spotEmoji:     { fontSize: 16 },
+    spotName:      { color: C.textMuted, fontSize: 14, fontWeight: "700" },
+    spotNameActive:{ color: C.primary },
 
-  btnRow:     { flexDirection: "row", gap: 10, marginTop: 20 },
-  cancelBtn:  { flex: 1, height: 50, borderRadius: 14, borderWidth: 1, borderColor: Colors.border, alignItems: "center", justifyContent: "center" },
-  cancelText: { color: Colors.textMuted, fontSize: 15, fontWeight: "600" },
-  saveBtn:    { flex: 1, height: 50, borderRadius: 14, backgroundColor: Colors.primary, alignItems: "center", justifyContent: "center" },
-  saveText:   { color: "#fff", fontSize: 15, fontWeight: "700" },
-});
+    btnRow:    { flexDirection: "row", gap: 10, marginTop: 20 },
+    cancelBtn: { flex: 1, height: 50, borderRadius: 14, borderWidth: 1, borderColor: C.border, alignItems: "center", justifyContent: "center" },
+    cancelText:{ color: C.textMuted, fontSize: 15, fontWeight: "600" },
+    saveBtn:   { flex: 1, height: 50, borderRadius: 14, backgroundColor: C.primary, alignItems: "center", justifyContent: "center" },
+    saveText:  { color: "#fff", fontSize: 15, fontWeight: "700" },
+  });
+}

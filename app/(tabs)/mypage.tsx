@@ -1,4 +1,5 @@
-import { Colors } from "@/constants/theme";
+import { useTheme } from "@/context/ThemeContext";
+import { ThemeColors } from "@/constants/theme";
 import { useAuth } from "@/context/AuthContext";
 import { SpotId } from "@/lib/userService";
 import * as ImagePicker from "expo-image-picker";
@@ -10,11 +11,13 @@ import {
   LogOut,
   Mail,
   MapPin,
+  Moon,
   Phone,
+  Sun,
   Trash2,
   User,
 } from "lucide-react-native";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -23,6 +26,7 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -41,6 +45,10 @@ type ModalType = "nickname" | "email" | "phone" | "delete" | null;
 
 export default function MyPageScreen() {
   const router = useRouter();
+  const { colors: C, isDark, toggle: toggleTheme } = useTheme();
+  const styles  = useMemo(() => makeStyles(C), [C]);
+  const mStyles = useMemo(() => makeMStyles(C), [C]);
+
   const {
     user,
     userProfile,
@@ -82,7 +90,6 @@ export default function MyPageScreen() {
     setModalError("");
   }
 
-  // 프로필 사진
   const handlePickPhoto = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") { Alert.alert("권한 필요", "사진 접근 권한이 필요합니다."); return; }
@@ -103,7 +110,6 @@ export default function MyPageScreen() {
     }
   };
 
-  // 스팟 다중선택 토글
   const handleToggleSpot = async (spotId: SpotId) => {
     setSpotSaving(true);
     try {
@@ -126,7 +132,6 @@ export default function MyPageScreen() {
     }
   };
 
-  // 닉네임
   const handleSaveNickname = async () => {
     if (!newNickname.trim()) { setModalError("닉네임을 입력해주세요."); return; }
     setSaving(true);
@@ -135,7 +140,6 @@ export default function MyPageScreen() {
     finally { setSaving(false); }
   };
 
-  // 이메일
   const handleSaveEmail = async () => {
     if (!newEmail.trim()) { setModalError("이메일을 입력해주세요."); return; }
     if (!emailPassword) { setModalError("현재 비밀번호를 입력해주세요."); return; }
@@ -150,7 +154,6 @@ export default function MyPageScreen() {
     finally { setSaving(false); }
   };
 
-  // 전화번호
   const handleSavePhone = async () => {
     if (!newPhone.trim()) { setModalError("전화번호를 입력해주세요."); return; }
     setSaving(true);
@@ -159,7 +162,6 @@ export default function MyPageScreen() {
     finally { setSaving(false); }
   };
 
-  // 회원탈퇴
   const handleDeleteAccount = async () => {
     setSaving(true);
     try {
@@ -175,7 +177,6 @@ export default function MyPageScreen() {
     }
   };
 
-  // 로그아웃
   const handleLogout = async () => {
     const doLogout = async () => {
       try { await logout(); } catch (e) {}
@@ -208,7 +209,7 @@ export default function MyPageScreen() {
           <TouchableOpacity style={styles.avatarWrap} onPress={handlePickPhoto} disabled={photoLoading}>
             {photoURL
               ? <Image source={{ uri: photoURL }} style={styles.avatar} />
-              : <View style={styles.avatarPlaceholder}><User size={32} color={Colors.textSubtle} /></View>
+              : <View style={styles.avatarPlaceholder}><User size={32} color={C.textSubtle} /></View>
             }
             <View style={styles.cameraBtn}>
               {photoLoading ? <ActivityIndicator size="small" color="#fff" /> : <Camera size={13} color="#fff" />}
@@ -224,26 +225,26 @@ export default function MyPageScreen() {
           <View style={styles.sectionCard}>
             <TouchableOpacity style={styles.row} onPress={() => openModal("nickname")}>
               <View style={styles.rowLeft}>
-                <View style={styles.rowIcon}><User size={16} color={Colors.primary} /></View>
+                <View style={styles.rowIcon}><User size={16} color={C.primary} /></View>
                 <View><Text style={styles.rowLabel}>닉네임</Text><Text style={styles.rowValue}>{displayName}</Text></View>
               </View>
-              <ChevronRight size={16} color={Colors.textSubtle} />
+              <ChevronRight size={16} color={C.textSubtle} />
             </TouchableOpacity>
             <View style={styles.rowDivider} />
             <TouchableOpacity style={styles.row} onPress={() => openModal("email")}>
               <View style={styles.rowLeft}>
-                <View style={styles.rowIcon}><Mail size={16} color={Colors.primary} /></View>
+                <View style={styles.rowIcon}><Mail size={16} color={C.primary} /></View>
                 <View><Text style={styles.rowLabel}>이메일</Text><Text style={styles.rowValue}>{email || "미설정"}</Text></View>
               </View>
-              <ChevronRight size={16} color={Colors.textSubtle} />
+              <ChevronRight size={16} color={C.textSubtle} />
             </TouchableOpacity>
             <View style={styles.rowDivider} />
             <TouchableOpacity style={styles.row} onPress={() => openModal("phone")}>
               <View style={styles.rowLeft}>
-                <View style={styles.rowIcon}><Phone size={16} color={Colors.primary} /></View>
+                <View style={styles.rowIcon}><Phone size={16} color={C.primary} /></View>
                 <View><Text style={styles.rowLabel}>전화번호</Text><Text style={styles.rowValue}>{phone || "미설정"}</Text></View>
               </View>
-              <ChevronRight size={16} color={Colors.textSubtle} />
+              <ChevronRight size={16} color={C.textSubtle} />
             </TouchableOpacity>
           </View>
         </View>
@@ -253,7 +254,7 @@ export default function MyPageScreen() {
           <Text style={styles.sectionTitle}>선호 서핑 스팟 (복수 선택 가능)</Text>
           <View style={styles.sectionCard}>
             <View style={styles.spotHeader}>
-              <MapPin size={16} color={Colors.primary} />
+              <MapPin size={16} color={C.primary} />
               <Text style={styles.spotHeaderText}>선택한 스팟만 홈 화면에 표시됩니다</Text>
             </View>
             <View style={styles.spotRow}>
@@ -268,17 +269,41 @@ export default function MyPageScreen() {
                   >
                     <Text style={styles.spotEmoji}>{spot.emoji}</Text>
                     <Text style={[styles.spotName, active && styles.spotNameActive]}>{spot.name}</Text>
-                    {active && <Check size={14} color={Colors.primary} strokeWidth={2.5} />}
+                    {active && <Check size={14} color={C.primary} strokeWidth={2.5} />}
                   </TouchableOpacity>
                 );
               })}
             </View>
             {spotSaving && (
               <View style={styles.spotSavingRow}>
-                <ActivityIndicator size="small" color={Colors.primary} />
+                <ActivityIndicator size="small" color={C.primary} />
                 <Text style={styles.spotSavingText}>저장 중...</Text>
               </View>
             )}
+          </View>
+        </View>
+
+        {/* 앱 설정 */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>앱 설정</Text>
+          <View style={styles.sectionCard}>
+            <View style={styles.row}>
+              <View style={styles.rowLeft}>
+                <View style={styles.rowIcon}>
+                  {isDark
+                    ? <Moon size={16} color={C.primary} />
+                    : <Sun size={16} color={C.warning} />
+                  }
+                </View>
+                <Text style={styles.rowLabel}>{isDark ? "다크 모드" : "라이트 모드"}</Text>
+              </View>
+              <Switch
+                value={isDark}
+                onValueChange={toggleTheme}
+                trackColor={{ false: "rgba(0,0,0,0.12)", true: `${C.primary}55` }}
+                thumbColor={isDark ? C.primary : "#94A3B8"}
+              />
+            </View>
           </View>
         </View>
 
@@ -289,21 +314,21 @@ export default function MyPageScreen() {
             <TouchableOpacity style={styles.row} onPress={handleLogout}>
               <View style={styles.rowLeft}>
                 <View style={[styles.rowIcon, { backgroundColor: "rgba(148,163,184,0.1)" }]}>
-                  <LogOut size={16} color={Colors.textMuted} />
+                  <LogOut size={16} color={C.textMuted} />
                 </View>
                 <Text style={styles.rowLabel}>로그아웃</Text>
               </View>
-              <ChevronRight size={16} color={Colors.textSubtle} />
+              <ChevronRight size={16} color={C.textSubtle} />
             </TouchableOpacity>
             <View style={styles.rowDivider} />
             <TouchableOpacity style={styles.row} onPress={() => openModal("delete")}>
               <View style={styles.rowLeft}>
                 <View style={[styles.rowIcon, { backgroundColor: "rgba(239,68,68,0.1)" }]}>
-                  <Trash2 size={16} color={Colors.error} />
+                  <Trash2 size={16} color={C.error} />
                 </View>
-                <Text style={[styles.rowLabel, { color: Colors.error }]}>회원 탈퇴</Text>
+                <Text style={[styles.rowLabel, { color: C.error }]}>회원 탈퇴</Text>
               </View>
-              <ChevronRight size={16} color={Colors.textSubtle} />
+              <ChevronRight size={16} color={C.textSubtle} />
             </TouchableOpacity>
           </View>
         </View>
@@ -318,7 +343,7 @@ export default function MyPageScreen() {
             <Text style={mStyles.title}>닉네임 변경</Text>
             <View style={mStyles.fieldGroup}>
               <Text style={mStyles.fieldLabel}>새 닉네임</Text>
-              <TextInput style={mStyles.input} value={newNickname} onChangeText={setNewNickname} placeholderTextColor={Colors.textSubtle} placeholder="닉네임 입력" autoFocus />
+              <TextInput style={mStyles.input} value={newNickname} onChangeText={setNewNickname} placeholderTextColor={C.textSubtle} placeholder="닉네임 입력" autoFocus />
             </View>
             {modalError ? <Text style={mStyles.error}>{modalError}</Text> : null}
             <View style={mStyles.btnRow}>
@@ -338,11 +363,11 @@ export default function MyPageScreen() {
             <Text style={mStyles.title}>이메일 변경</Text>
             <View style={mStyles.fieldGroup}>
               <Text style={mStyles.fieldLabel}>새 이메일</Text>
-              <TextInput style={mStyles.input} value={newEmail} onChangeText={setNewEmail} keyboardType="email-address" autoCapitalize="none" placeholderTextColor={Colors.textSubtle} placeholder="새 이메일 주소" autoFocus />
+              <TextInput style={mStyles.input} value={newEmail} onChangeText={setNewEmail} keyboardType="email-address" autoCapitalize="none" placeholderTextColor={C.textSubtle} placeholder="새 이메일 주소" autoFocus />
             </View>
             <View style={mStyles.fieldGroup}>
               <Text style={mStyles.fieldLabel}>현재 비밀번호</Text>
-              <TextInput style={mStyles.input} value={emailPassword} onChangeText={setEmailPassword} secureTextEntry placeholderTextColor={Colors.textSubtle} placeholder="현재 비밀번호 확인" />
+              <TextInput style={mStyles.input} value={emailPassword} onChangeText={setEmailPassword} secureTextEntry placeholderTextColor={C.textSubtle} placeholder="현재 비밀번호 확인" />
             </View>
             {modalError ? <Text style={mStyles.error}>{modalError}</Text> : null}
             <View style={mStyles.btnRow}>
@@ -362,7 +387,7 @@ export default function MyPageScreen() {
             <Text style={mStyles.title}>전화번호 변경</Text>
             <View style={mStyles.fieldGroup}>
               <Text style={mStyles.fieldLabel}>전화번호</Text>
-              <TextInput style={mStyles.input} value={newPhone} onChangeText={setNewPhone} keyboardType="phone-pad" placeholderTextColor={Colors.textSubtle} placeholder="010-1234-5678" autoFocus />
+              <TextInput style={mStyles.input} value={newPhone} onChangeText={setNewPhone} keyboardType="phone-pad" placeholderTextColor={C.textSubtle} placeholder="010-1234-5678" autoFocus />
             </View>
             {modalError ? <Text style={mStyles.error}>{modalError}</Text> : null}
             <View style={mStyles.btnRow}>
@@ -379,20 +404,20 @@ export default function MyPageScreen() {
       <Modal visible={activeModal === "delete"} transparent animationType="fade" onRequestClose={closeModal}>
         <View style={mStyles.overlay}>
           <View style={mStyles.card}>
-            <Text style={[mStyles.title, { color: Colors.error }]}>⚠️ 회원 탈퇴</Text>
+            <Text style={[mStyles.title, { color: C.error }]}>⚠️ 회원 탈퇴</Text>
             <Text style={mStyles.deleteWarning}>탈퇴 시 모든 데이터가 삭제되며 복구할 수 없습니다.</Text>
             {isGoogleUser ? (
               <Text style={mStyles.deleteWarning}>Google 계정으로 로그인했습니다. 탈퇴 시 Google 인증 팝업이 열립니다.</Text>
             ) : (
               <View style={mStyles.fieldGroup}>
                 <Text style={mStyles.fieldLabel}>비밀번호 확인</Text>
-                <TextInput style={mStyles.input} value={deletePassword} onChangeText={setDeletePassword} secureTextEntry placeholderTextColor={Colors.textSubtle} placeholder="현재 비밀번호" autoFocus />
+                <TextInput style={mStyles.input} value={deletePassword} onChangeText={setDeletePassword} secureTextEntry placeholderTextColor={C.textSubtle} placeholder="현재 비밀번호" autoFocus />
               </View>
             )}
             {modalError ? <Text style={mStyles.error}>{modalError}</Text> : null}
             <View style={mStyles.btnRow}>
               <TouchableOpacity style={mStyles.cancelBtn} onPress={closeModal}><Text style={mStyles.cancelText}>취소</Text></TouchableOpacity>
-              <TouchableOpacity style={[mStyles.saveBtn, { backgroundColor: Colors.error }, saving && { opacity: 0.6 }]} onPress={handleDeleteAccount} disabled={saving}>
+              <TouchableOpacity style={[mStyles.saveBtn, { backgroundColor: C.error }, saving && { opacity: 0.6 }]} onPress={handleDeleteAccount} disabled={saving}>
                 {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={mStyles.saveText}>탈퇴</Text>}
               </TouchableOpacity>
             </View>
@@ -403,57 +428,61 @@ export default function MyPageScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: Colors.bg },
-  scroll: { flex: 1 },
-  content: { paddingHorizontal: 20, paddingTop: 12 },
+function makeStyles(C: ThemeColors) {
+  return StyleSheet.create({
+    safeArea: { flex: 1, backgroundColor: C.bg },
+    scroll: { flex: 1 },
+    content: { paddingHorizontal: 20, paddingTop: 12 },
 
-  header: { marginBottom: 24 },
-  headerTitle: { color: Colors.text, fontSize: 26, fontWeight: "800" },
+    header: { marginBottom: 24 },
+    headerTitle: { color: C.text, fontSize: 26, fontWeight: "800" },
 
-  profileCard: { alignItems: "center", backgroundColor: Colors.bgCard, borderRadius: 24, padding: 28, borderWidth: 1, borderColor: Colors.border, marginBottom: 20 },
-  avatarWrap: { position: "relative", marginBottom: 14 },
-  avatar: { width: 88, height: 88, borderRadius: 44, borderWidth: 2, borderColor: Colors.primary },
-  avatarPlaceholder: { width: 88, height: 88, borderRadius: 44, backgroundColor: Colors.bgSurface, borderWidth: 2, borderColor: Colors.border, alignItems: "center", justifyContent: "center" },
-  cameraBtn: { position: "absolute", bottom: 0, right: 0, width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.primary, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: Colors.bg },
-  profileName: { color: Colors.text, fontSize: 20, fontWeight: "800", marginBottom: 4 },
-  profileEmail: { color: Colors.textMuted, fontSize: 14 },
+    profileCard: { alignItems: "center", backgroundColor: C.bgCard, borderRadius: 24, padding: 28, borderWidth: 1, borderColor: C.border, marginBottom: 20 },
+    avatarWrap: { position: "relative", marginBottom: 14 },
+    avatar: { width: 88, height: 88, borderRadius: 44, borderWidth: 2, borderColor: C.primary },
+    avatarPlaceholder: { width: 88, height: 88, borderRadius: 44, backgroundColor: C.bgSurface, borderWidth: 2, borderColor: C.border, alignItems: "center", justifyContent: "center" },
+    cameraBtn: { position: "absolute", bottom: 0, right: 0, width: 28, height: 28, borderRadius: 14, backgroundColor: C.primary, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: C.bg },
+    profileName: { color: C.text, fontSize: 20, fontWeight: "800", marginBottom: 4 },
+    profileEmail: { color: C.textMuted, fontSize: 14 },
 
-  section: { marginBottom: 20 },
-  sectionTitle: { color: Colors.textMuted, fontSize: 12, fontWeight: "700", letterSpacing: 0.5, marginBottom: 10, paddingLeft: 4 },
-  sectionCard: { backgroundColor: Colors.bgCard, borderRadius: 20, borderWidth: 1, borderColor: Colors.border, overflow: "hidden" },
+    section: { marginBottom: 20 },
+    sectionTitle: { color: C.textMuted, fontSize: 12, fontWeight: "700", letterSpacing: 0.5, marginBottom: 10, paddingLeft: 4 },
+    sectionCard: { backgroundColor: C.bgCard, borderRadius: 20, borderWidth: 1, borderColor: C.border, overflow: "hidden" },
 
-  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 18, paddingVertical: 16 },
-  rowLeft: { flexDirection: "row", alignItems: "center", gap: 14, flex: 1 },
-  rowIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: "rgba(14,165,233,0.1)", alignItems: "center", justifyContent: "center" },
-  rowLabel: { color: Colors.text, fontSize: 15, fontWeight: "600" },
-  rowValue: { color: Colors.textMuted, fontSize: 13, marginTop: 2 },
-  rowDivider: { height: 1, backgroundColor: Colors.border, marginHorizontal: 18 },
+    row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 18, paddingVertical: 16 },
+    rowLeft: { flexDirection: "row", alignItems: "center", gap: 14, flex: 1 },
+    rowIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: "rgba(14,165,233,0.1)", alignItems: "center", justifyContent: "center" },
+    rowLabel: { color: C.text, fontSize: 15, fontWeight: "600" },
+    rowValue: { color: C.textMuted, fontSize: 13, marginTop: 2 },
+    rowDivider: { height: 1, backgroundColor: C.border, marginHorizontal: 18 },
 
-  spotHeader: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 18, paddingTop: 16, paddingBottom: 12 },
-  spotHeaderText: { color: Colors.textMuted, fontSize: 13 },
-  spotRow: { flexDirection: "row", gap: 10, paddingHorizontal: 18, paddingBottom: 16, flexWrap: "wrap" },
-  spotChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 20, borderWidth: 1.5, borderColor: Colors.border, backgroundColor: Colors.bgSurface, minWidth: 80, justifyContent: "center" },
-  spotChipActive: { borderColor: Colors.primary, backgroundColor: "rgba(14,165,233,0.12)" },
-  spotEmoji: { fontSize: 14 },
-  spotName: { color: Colors.textMuted, fontSize: 14, fontWeight: "700" },
-  spotNameActive: { color: Colors.primary },
-  spotSavingRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 18, paddingBottom: 14 },
-  spotSavingText: { color: Colors.textMuted, fontSize: 13 },
-});
+    spotHeader: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 18, paddingTop: 16, paddingBottom: 12 },
+    spotHeaderText: { color: C.textMuted, fontSize: 13 },
+    spotRow: { flexDirection: "row", gap: 10, paddingHorizontal: 18, paddingBottom: 16, flexWrap: "wrap" },
+    spotChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 20, borderWidth: 1.5, borderColor: C.border, backgroundColor: C.bgSurface, minWidth: 80, justifyContent: "center" },
+    spotChipActive: { borderColor: C.primary, backgroundColor: "rgba(14,165,233,0.12)" },
+    spotEmoji: { fontSize: 14 },
+    spotName: { color: C.textMuted, fontSize: 14, fontWeight: "700" },
+    spotNameActive: { color: C.primary },
+    spotSavingRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 18, paddingBottom: 14 },
+    spotSavingText: { color: C.textMuted, fontSize: 13 },
+  });
+}
 
-const mStyles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.75)", alignItems: "center", justifyContent: "center", padding: 24 },
-  card: { width: "100%", maxWidth: 400, backgroundColor: Colors.bgCard, borderRadius: 24, padding: 24, borderWidth: 1, borderColor: Colors.border },
-  title: { color: Colors.text, fontSize: 18, fontWeight: "800", marginBottom: 20 },
-  fieldGroup: { marginBottom: 14 },
-  fieldLabel: { color: Colors.textMuted, fontSize: 13, fontWeight: "600", marginBottom: 8 },
-  input: { height: 50, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bgSurface, paddingHorizontal: 16, color: Colors.text, fontSize: 15 },
-  error: { color: Colors.error, fontSize: 13, marginBottom: 12 },
-  deleteWarning: { color: Colors.textMuted, fontSize: 14, lineHeight: 20, marginBottom: 16 },
-  btnRow: { flexDirection: "row", gap: 10, marginTop: 8 },
-  cancelBtn: { flex: 1, height: 48, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, alignItems: "center", justifyContent: "center" },
-  cancelText: { color: Colors.textMuted, fontSize: 15, fontWeight: "600" },
-  saveBtn: { flex: 1, height: 48, borderRadius: 12, backgroundColor: Colors.primary, alignItems: "center", justifyContent: "center" },
-  saveText: { color: "#fff", fontSize: 15, fontWeight: "700" },
-});
+function makeMStyles(C: ThemeColors) {
+  return StyleSheet.create({
+    overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.75)", alignItems: "center", justifyContent: "center", padding: 24 },
+    card: { width: "100%", maxWidth: 400, backgroundColor: C.bgCard, borderRadius: 24, padding: 24, borderWidth: 1, borderColor: C.border },
+    title: { color: C.text, fontSize: 18, fontWeight: "800", marginBottom: 20 },
+    fieldGroup: { marginBottom: 14 },
+    fieldLabel: { color: C.textMuted, fontSize: 13, fontWeight: "600", marginBottom: 8 },
+    input: { height: 50, borderRadius: 12, borderWidth: 1, borderColor: C.border, backgroundColor: C.bgSurface, paddingHorizontal: 16, color: C.text, fontSize: 15 },
+    error: { color: C.error, fontSize: 13, marginBottom: 12 },
+    deleteWarning: { color: C.textMuted, fontSize: 14, lineHeight: 20, marginBottom: 16 },
+    btnRow: { flexDirection: "row", gap: 10, marginTop: 8 },
+    cancelBtn: { flex: 1, height: 48, borderRadius: 12, borderWidth: 1, borderColor: C.border, alignItems: "center", justifyContent: "center" },
+    cancelText: { color: C.textMuted, fontSize: 15, fontWeight: "600" },
+    saveBtn: { flex: 1, height: 48, borderRadius: 12, backgroundColor: C.primary, alignItems: "center", justifyContent: "center" },
+    saveText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+  });
+}
