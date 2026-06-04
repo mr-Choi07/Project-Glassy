@@ -39,7 +39,7 @@ type AuthContextType = {
   loginWithGooglePopup: () => Promise<void>;
   updateNickname: (displayName: string) => Promise<void>;
   setSelectedSpots: (spotIds: SpotId[]) => Promise<void>;
-  updatePhoto: (uri: string) => Promise<void>;
+  updatePhoto: (uri: string, base64: string) => Promise<void>;
   updateUserEmail: (newEmail: string, currentPassword: string) => Promise<void>;
   updatePhone: (phoneNumber: string) => Promise<void>;
   deleteAccount: (currentPassword?: string) => Promise<void>;
@@ -168,9 +168,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const updatePhoto = async (uri: string) => {
+  const updatePhoto = async (uri: string, base64: string) => {
     if (!user) return;
-    const url = await uploadProfilePhoto(user.uid, uri);
+    const url = await uploadProfilePhoto(user.uid, uri, base64);
     await updateProfile(user, { photoURL: url });
     await updateUserProfile(user.uid, { photoURL: url });
   };

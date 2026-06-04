@@ -2,6 +2,7 @@ import { useTheme } from "@/context/ThemeContext";
 import { ThemeColors } from "@/constants/theme";
 import { useAuth } from "@/context/AuthContext";
 import { SpotId } from "@/lib/userService";
+import { REGION_GROUPS, SPOT_REGIONS } from "@/constants/spots";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import {
@@ -17,13 +18,14 @@ import {
   Trash2,
   User,
 } from "lucide-react-native";
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Image,
   Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Switch,
@@ -34,12 +36,12 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const SURF_SPOTS: { id: SpotId; name: string; emoji: string }[] = [
-  { id: "songjeong", name: "송정",   emoji: "🐚" },
-  { id: "haeundae",  name: "해운대", emoji: "🏖️" },
-  { id: "dadaepo",   name: "다대포", emoji: "🌊" },
-  { id: "gwanganri", name: "광안리", emoji: "🌉" },
-];
+// Derived from the central spots registry
+const SURF_SPOT_REGIONS = SPOT_REGIONS.map(r => ({
+  id: r.id,
+  label: r.label,
+  spots: r.spots.map(s => ({ id: s.id as SpotId, name: s.name, emoji: s.emoji })),
+}));
 
 type ModalType = "nickname" | "email" | "phone" | "delete" | null;
 
@@ -66,6 +68,18 @@ export default function MyPageScreen() {
   const [saving, setSaving]           = useState(false);
   const [photoLoading, setPhotoLoading] = useState(false);
   const [spotSaving, setSpotSaving]   = useState(false);
+  const [spotModalOpen, setSpotModalOpen]         = useState(false);
+  const [spotGroupActive, setSpotGroupActive]     = useState(REGION_GROUPS[0]?.id ?? "");
+  const [spotSubActive, setSpotSubActive]         = useState(REGION_GROUPS[0]?.subIds[0] ?? "");
+
+  const spotSubRegions = useMemo(() => {
+    const group = REGION_GROUPS.find(g => g.id === spotGroupActive);
+    return (group?.subIds ?? []).map(id => SPOT_REGIONS.find(r => r.id === id)!).filter(Boolean);
+  }, [spotGroupActive]);
+  const spotCurrentSpots = useMemo(() => {
+    if (spotSubRegions.length <= 1) return spotSubRegions[0]?.spots ?? [];
+    return spotSubRegions.find(r => r.id === spotSubActive)?.spots ?? [];
+  }, [spotSubRegions, spotSubActive]);
 
   const [newNickname, setNewNickname] = useState("");
   const [newEmail, setNewEmail]       = useState("");
@@ -95,12 +109,14 @@ export default function MyPageScreen() {
     if (status !== "granted") { Alert.alert("권한 필요", "사진 접근 권한이 필요합니다."); return; }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true, aspect: [1, 1], quality: 0.8,
+      allowsEditing: true, aspect: [1, 1], quality: 0.6, base64: true,
     });
     if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      if (!asset.base64) { Alert.alert("오류", "이미지 데이터를 읽을 수 없습니다."); return; }
       setPhotoLoading(true);
       try {
-        await updatePhoto(result.assets[0].uri);
+        await updatePhoto(asset.uri, asset.base64);
         Alert.alert("완료", "프로필 사진이 변경되었습니다.");
       } catch (e: any) {
         Alert.alert("오류", `사진 업로드 실패: ${e.message ?? String(e)}`);
@@ -249,37 +265,26 @@ export default function MyPageScreen() {
           </View>
         </View>
 
-        {/* 스팟 다중선택 */}
+        {/* 스팟 선택 버튼 */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>선호 서핑 스팟 (복수 선택 가능)</Text>
+          <Text style={styles.sectionTitle}>선호 서핑 스팟</Text>
           <View style={styles.sectionCard}>
-            <View style={styles.spotHeader}>
-              <MapPin size={16} color={C.primary} />
-              <Text style={styles.spotHeaderText}>선택한 스팟만 홈 화면에 표시됩니다</Text>
-            </View>
-            <View style={styles.spotRow}>
-              {SURF_SPOTS.map((spot) => {
-                const active = selectedSpotIds.includes(spot.id);
-                return (
-                  <TouchableOpacity
-                    key={spot.id}
-                    style={[styles.spotChip, active && styles.spotChipActive]}
-                    onPress={() => handleToggleSpot(spot.id)}
-                    disabled={spotSaving}
-                  >
-                    <Text style={styles.spotEmoji}>{spot.emoji}</Text>
-                    <Text style={[styles.spotName, active && styles.spotNameActive]}>{spot.name}</Text>
-                    {active && <Check size={14} color={C.primary} strokeWidth={2.5} />}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-            {spotSaving && (
-              <View style={styles.spotSavingRow}>
-                <ActivityIndicator size="small" color={C.primary} />
-                <Text style={styles.spotSavingText}>저장 중...</Text>
+            <TouchableOpacity style={styles.row} onPress={() => setSpotModalOpen(true)}>
+              <View style={styles.rowLeft}>
+                <View style={styles.rowIcon}><MapPin size={16} color={C.primary} /></View>
+                <View>
+                  <Text style={styles.rowLabel}>스팟 선택</Text>
+                  <Text style={styles.rowValue}>
+                    {selectedSpotIds.length === 0
+                      ? "선택된 스팟 없음"
+                      : `${selectedSpotIds.length}개 선택됨`}
+                  </Text>
+                </View>
               </View>
-            )}
+              {spotSaving
+                ? <ActivityIndicator size="small" color={C.primary} />
+                : <ChevronRight size={16} color={C.textSubtle} />}
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -424,6 +429,144 @@ export default function MyPageScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* 스팟 선택 팝업 모달 */}
+      <Modal visible={spotModalOpen} transparent animationType="slide" onRequestClose={() => setSpotModalOpen(false)}>
+        {/* 빈 공간 터치 시 닫기 */}
+        <Pressable style={styles.spotModalOverlay} onPress={() => setSpotModalOpen(false)}>
+          <Pressable style={styles.spotModalSheet} onPress={() => {}}>
+
+            {/* 핸들바 */}
+            <View style={styles.spotModalHandle} />
+
+            {/* 헤더 */}
+            <View style={styles.spotModalHeader}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                <Text style={styles.spotModalTitle}>서핑 스팟 선택</Text>
+                {selectedSpotIds.length > 0 && (
+                  <View style={styles.spotModalCount}>
+                    <Text style={styles.spotModalCountText}>{selectedSpotIds.length}개 선택</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.spotModalSub}>선택한 스팟이 홈 화면 탭에 표시됩니다</Text>
+            </View>
+
+            {/* 1단계: 통합 지역 탭 */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.spotModalTabScroll} contentContainerStyle={styles.spotModalTabContent}>
+              {REGION_GROUPS.map(group => {
+                const isActive = group.id === spotGroupActive;
+                const selCount = group.subIds.reduce((n, id) => {
+                  const r = SPOT_REGIONS.find(x => x.id === id);
+                  return n + (r?.spots.filter(s => selectedSpotIds.includes(s.id)).length ?? 0);
+                }, 0);
+                return (
+                  <TouchableOpacity key={group.id}
+                    style={[styles.spotModalTab, isActive && styles.spotModalTabActive]}
+                    onPress={() => { setSpotGroupActive(group.id); setSpotSubActive(group.subIds[0]); }}
+                  >
+                    <Text style={[styles.spotModalTabText, isActive && styles.spotModalTabTextActive]}>{group.label}</Text>
+                    {selCount > 0 && <View style={styles.spotModalTabDot} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            {/* 2단계: 세부 탭 (2개 이상일 때만) */}
+            {spotSubRegions.length > 1 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.spotModalSubScroll} contentContainerStyle={styles.spotModalSubContent}>
+                {spotSubRegions.map(sub => {
+                  const isActive = sub.id === spotSubActive;
+                  const selCnt = sub.spots.filter(s => selectedSpotIds.includes(s.id)).length;
+                  return (
+                    <TouchableOpacity key={sub.id}
+                      style={[styles.spotModalSubTab, isActive && styles.spotModalSubTabActive]}
+                      onPress={() => setSpotSubActive(sub.id)}
+                    >
+                      <Text style={[styles.spotModalSubText, isActive && styles.spotModalSubTextActive]} numberOfLines={1}>
+                        {sub.label.replace(/^강원 /, "").replace(/^경북 /, "")}
+                      </Text>
+                      {selCnt > 0 && <View style={[styles.spotModalTabDot, { backgroundColor: C.success }]} />}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+
+            {/* 스팟 목록 */}
+            <ScrollView style={styles.spotModalBody} contentContainerStyle={styles.spotModalBodyContent} showsVerticalScrollIndicator={false}>
+              <View style={styles.spotRow}>
+                {spotCurrentSpots.map(spot => {
+                  const active = selectedSpotIds.includes(spot.id);
+                  return (
+                    <TouchableOpacity
+                      key={spot.id}
+                      style={[styles.spotChip, active && styles.spotChipActive]}
+                      onPress={() => handleToggleSpot(spot.id)}
+                      disabled={spotSaving}
+                    >
+                      <Text style={styles.spotEmoji}>{spot.emoji}</Text>
+                      <Text style={[styles.spotName, active && styles.spotNameActive]} numberOfLines={1}>{spot.name}</Text>
+                      {active && <Check size={13} color={C.primary} strokeWidth={2.5} />}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* 선택 순서 변경 */}
+              {selectedSpotIds.length > 1 && (
+                <View style={styles.orderSection}>
+                  <Text style={styles.orderTitle}>홈 화면 표시 순서</Text>
+                  {selectedSpotIds.map((id, idx) => {
+                    const spotInfo = SURF_SPOT_REGIONS.flatMap(r => r.spots).find(s => s.id === id);
+                    if (!spotInfo) return null;
+                    return (
+                      <View key={id} style={styles.orderRow}>
+                        <Text style={styles.orderNum}>{idx + 1}</Text>
+                        <Text style={styles.orderEmoji}>{spotInfo.emoji}</Text>
+                        <Text style={styles.orderName}>{spotInfo.name}</Text>
+                        <View style={styles.orderBtns}>
+                          <TouchableOpacity
+                            style={[styles.orderBtn, idx === 0 && { opacity: 0.3 }]}
+                            disabled={idx === 0}
+                            onPress={async () => {
+                              const next = [...selectedSpotIds];
+                              [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+                              await setSelectedSpots(next);
+                            }}
+                          >
+                            <Text style={styles.orderBtnText}>↑</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.orderBtn, idx === selectedSpotIds.length - 1 && { opacity: 0.3 }]}
+                            disabled={idx === selectedSpotIds.length - 1}
+                            onPress={async () => {
+                              const next = [...selectedSpotIds];
+                              [next[idx + 1], next[idx]] = [next[idx], next[idx + 1]];
+                              await setSelectedSpots(next);
+                            }}
+                          >
+                            <Text style={styles.orderBtnText}>↓</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </ScrollView>
+
+            {/* 완료 버튼 */}
+            <View style={styles.spotModalFooter}>
+              <TouchableOpacity style={styles.spotModalDoneBtn} onPress={() => setSpotModalOpen(false)}>
+                {spotSaving
+                  ? <ActivityIndicator color="#fff" size="small" />
+                  : <Text style={styles.spotModalDoneText}>완료</Text>}
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -458,13 +601,54 @@ function makeStyles(C: ThemeColors) {
 
     spotHeader: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 18, paddingTop: 16, paddingBottom: 12 },
     spotHeaderText: { color: C.textMuted, fontSize: 13 },
-    spotRow: { flexDirection: "row", gap: 10, paddingHorizontal: 18, paddingBottom: 16, flexWrap: "wrap" },
+    spotRegionHeader: { paddingHorizontal: 18, paddingTop: 8, paddingBottom: 6, borderTopWidth: 1, borderTopColor: C.border },
+    spotRegionLabel: { color: C.textMuted, fontSize: 11, fontWeight: "800", letterSpacing: 0.4 },
+    spotRow: { flexDirection: "row", gap: 10, paddingHorizontal: 18, paddingBottom: 12, flexWrap: "wrap" },
     spotChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 20, borderWidth: 1.5, borderColor: C.border, backgroundColor: C.bgSurface, minWidth: 80, justifyContent: "center" },
     spotChipActive: { borderColor: C.primary, backgroundColor: "rgba(14,165,233,0.12)" },
     spotEmoji: { fontSize: 14 },
     spotName: { color: C.textMuted, fontSize: 14, fontWeight: "700" },
     spotNameActive: { color: C.primary },
     spotSavingRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 18, paddingBottom: 14 },
+
+    // 스팟 팝업 모달
+    spotModalOverlay:      { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end" },
+    spotModalSheet:        { backgroundColor: C.bgCard, borderTopLeftRadius: 28, borderTopRightRadius: 28, borderWidth: 1, borderColor: C.border, maxHeight: "88%" },
+    spotModalHandle:       { width: 40, height: 4, borderRadius: 2, backgroundColor: C.border, alignSelf: "center", marginTop: 10, marginBottom: 4 },
+    spotModalHeader:       { paddingHorizontal: 22, paddingTop: 14, paddingBottom: 12 },
+    spotModalTitle:        { color: C.text, fontSize: 19, fontWeight: "800", marginBottom: 4 },
+    spotModalSub:          { color: C.textMuted, fontSize: 13, marginTop: 4 },
+    spotModalCount:        { backgroundColor: "rgba(14,165,233,0.12)", paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20, borderWidth: 1, borderColor: "rgba(14,165,233,0.25)" },
+    spotModalCountText:    { color: C.primary, fontSize: 12, fontWeight: "700" },
+    spotModalTabScroll:    { borderTopWidth: 1, borderBottomWidth: 1, borderColor: C.border },
+    spotModalTabContent:   { paddingHorizontal: 14, paddingVertical: 10, gap: 8 },
+    spotModalTab:          { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1.5, borderColor: C.border, backgroundColor: C.bgSurface, flexDirection: "row", alignItems: "center", gap: 5 },
+    spotModalTabActive:    { borderColor: C.primary, backgroundColor: "rgba(14,165,233,0.12)" },
+    spotModalTabText:      { color: C.textMuted, fontSize: 13, fontWeight: "700" },
+    spotModalTabTextActive:{ color: C.primary },
+    spotModalTabDot:       { width: 6, height: 6, borderRadius: 3, backgroundColor: C.primary },
+    spotModalSubScroll:    { borderBottomWidth: 1, borderBottomColor: C.border, backgroundColor: C.bgSurface },
+    spotModalSubContent:   { paddingHorizontal: 14, paddingVertical: 8, gap: 6 },
+    spotModalSubTab:       { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, flexDirection: "row", alignItems: "center", gap: 4 },
+    spotModalSubTabActive: { backgroundColor: "rgba(14,165,233,0.12)" },
+    spotModalSubText:      { color: C.textSubtle, fontSize: 12, fontWeight: "700" },
+    spotModalSubTextActive:{ color: C.primary },
+    spotModalBody:         { flexGrow: 0, maxHeight: 380 },
+    spotModalBodyContent:  { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8 },
+    spotModalFooter:       { paddingHorizontal: 20, paddingVertical: 14, borderTopWidth: 1, borderTopColor: C.border },
+    spotModalDoneBtn:      { height: 50, borderRadius: 16, backgroundColor: C.primary, alignItems: "center", justifyContent: "center" },
+    spotModalDoneText:     { color: "#fff", fontSize: 16, fontWeight: "800" },
+
+    // 순서 변경 섹션
+    orderSection:  { marginTop: 16, borderTopWidth: 1, borderTopColor: C.border, paddingTop: 14 },
+    orderTitle:    { color: C.textMuted, fontSize: 12, fontWeight: "800", letterSpacing: 0.3, marginBottom: 10 },
+    orderRow:      { flexDirection: "row", alignItems: "center", paddingVertical: 10, gap: 10, borderRadius: 12, paddingHorizontal: 4 },
+    orderNum:      { color: C.textSubtle, fontSize: 13, fontWeight: "700", width: 18, textAlign: "center" },
+    orderEmoji:    { fontSize: 18, width: 24, textAlign: "center" },
+    orderName:     { flex: 1, color: C.text, fontSize: 14, fontWeight: "600" },
+    orderBtns:     { flexDirection: "row", gap: 6 },
+    orderBtn:      { width: 32, height: 32, borderRadius: 8, backgroundColor: C.bgSurface, borderWidth: 1, borderColor: C.border, alignItems: "center", justifyContent: "center" },
+    orderBtnText:  { color: C.text, fontSize: 14, fontWeight: "700" },
     spotSavingText: { color: C.textMuted, fontSize: 13 },
   });
 }

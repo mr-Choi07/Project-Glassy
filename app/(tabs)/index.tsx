@@ -1,5 +1,3 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { useRouter } from "expo-router";
 import { AlertTriangle, LogOut, Waves } from "lucide-react-native";
@@ -18,9 +16,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { ThemeColors } from "@/constants/theme";
 import { useTheme } from "@/context/ThemeContext";
+import { ALL_SPOTS_FLAT } from "@/constants/spots";
 
 const KMA_AUTH_KEY = process.env.EXPO_PUBLIC_KMA_AUTH_KEY!;
-const genAI = new GoogleGenerativeAI(process.env.EXPO_PUBLIC_GEMINI_API_KEY!);
+
 
 function calcMulttae(date: Date, C: ThemeColors) {
   const ref = new Date("2024-01-11T00:00:00Z").getTime();
@@ -45,14 +44,51 @@ const SURF_TIPS = [
   "서핑 전후 충분한 수분 섭취가 중요해요",
 ];
 
-const ALL_SPOTS = [
-  { id: "songjeong", name: "송정",   lat: 35.1786, lon: 129.2075, area: "남해동부앞바다", emoji: "🐚" },
-  { id: "haeundae",  name: "해운대", lat: 35.1588, lon: 129.1604, area: "남해동부앞바다", emoji: "🏖️" },
-  { id: "dadaepo",   name: "다대포", lat: 35.0476, lon: 128.9610, area: "남해동부앞바다", emoji: "🌊" },
-  { id: "gwanganri", name: "광안리", lat: 35.1530, lon: 129.1185, area: "남해동부앞바다", emoji: "🌉" },
-] as const;
+// KMA 기상특보 구역명 매핑 (API 응답 텍스트 매칭용)
+const KMA_AREA: Record<string, string> = {
+  songjeong: "남해동부앞바다", haeundae:  "남해동부앞바다",
+  dadaepo:   "남해동부앞바다", gwanganri: "남해동부앞바다",
+  jukdo: "동해중부앞바다", inggu: "동해중부앞바다", gisamun: "동해중부앞바다",
+  gaetmaul: "동해중부앞바다", namae3ri: "동해중부앞바다", mulchi: "동해중부앞바다",
+  seorak: "동해중부앞바다", dongsan: "동해중부앞바다", surferbeach: "동해중부앞바다",
+  hajodae: "동해중부앞바다", dongho: "동해중부앞바다", naksan: "동해중부앞바다",
+  jeongam: "동해중부앞바다", songjho: "동해북부앞바다", cheonjin: "동해북부앞바다",
+  sokcho: "동해북부앞바다", geumjin: "동해중부앞바다", gyeongpo: "동해중부앞바다",
+  daejin: "동해중부앞바다", yonghwa: "동해중부앞바다",
+  jungmun: "제주도남쪽바다", ihoteu: "제주도북쪽바다", woljeong: "제주도북쪽바다", gwakji: "제주도북쪽바다",
+  boheung: "동해중부앞바다", sinhangman: "동해중부앞바다", wolpo: "동해중부앞바다",
+  malliopo: "서해중부앞바다",
+};
+
+// lat/lon: 해수욕장 위치(지도용), apiLat/apiLon: 오픈워터 API 포인트(파도 정확도 향상)
+// ALL_SPOTS is derived from the central registry; we add the `area` field for KMA warnings.
+const ALL_SPOTS = ALL_SPOTS_FLAT.map(s => ({
+  id: s.id,
+  name: s.name,
+  lat: s.lat, lon: s.lon,
+  apiLat: s.apiLat, apiLon: s.apiLon,
+  emoji: s.emoji,
+  area: KMA_AREA[s.id] ?? "동해중부앞바다",
+}));
 
 type Spot = typeof ALL_SPOTS[number];
+
+// spot/[id].tsx 와 동일한 지형 차폐 계수 (shelterFactor × swell 방향 효율)
+// Derived from the central registry.
+const SPOT_SHELTER: Record<string, { shelterFactor: number; swellWindow: [number, number] }> = Object.fromEntries(
+  ALL_SPOTS_FLAT.map(s => [s.id, { shelterFactor: s.shelterFactor, swellWindow: s.swellWindow }])
+);
+
+function swellEff(waveDir: number, win: [number, number]): number {
+  const a = ((waveDir % 360) + 360) % 360;
+  const inWin = win[0] <= win[1] ? a >= win[0] && a <= win[1] : a >= win[0] || a <= win[1];
+  if (inWin) return 1.0;
+  const d = Math.min(
+    Math.abs(((a - win[0] + 540) % 360) - 180),
+    Math.abs(((a - win[1] + 540) % 360) - 180),
+  );
+  return d < 25 ? 0.60 : d < 50 ? 0.30 : 0.10;
+}
 
 function getCondition(h: number, C: ThemeColors) {
   if (h < 0.5) return { label: "FLAT",    color: C.textSubtle };
@@ -71,12 +107,12 @@ export default function HomeScreen() {
   const activeSpots = useMemo<Spot[]>(() => {
     const ids = userProfile?.selectedSpotIds ?? [];
     if (ids.length === 0) return [];
-    return ALL_SPOTS.filter(s => ids.includes(s.id as any));
+    // selectedSpotIds 순서를 그대로 유지 (사용자 커스텀 순서)
+    return ids.map(id => ALL_SPOTS.find(s => s.id === id)).filter(Boolean) as Spot[];
   }, [userProfile?.selectedSpotIds]);
 
   const [selectedSpot, setSelectedSpot] = useState<Spot>(ALL_SPOTS[0]);
   const [spotInitialized, setSpotInitialized] = useState(false);
-  const [surfBriefing, setSurfBriefing]     = useState("");
   const [waveHeight, setWaveHeight]         = useState<number | null>(null);
   const [wavePeriod, setWavePeriod]         = useState<number | null>(null);
   const [warningStatus, setWarningStatus]   = useState("정상");
@@ -101,28 +137,20 @@ export default function HomeScreen() {
   }, [activeSpots]);
 
   const getSurfForecast = useCallback(
-    async (spot: Spot = selectedSpot, forceRefresh = false) => {
+    async (spot: Spot = selectedSpot) => {
       setLoading(true);
       try {
-        const cacheKey = `surf_v8_${spot.id}`;
-        const cached = await AsyncStorage.getItem(cacheKey);
-        if (cached && !forceRefresh) {
-          const { content, height, period, warning, timestamp } = JSON.parse(cached);
-          if (Date.now() - timestamp < 3600000) {
-            setSurfBriefing(content);
-            setWaveHeight(height);
-            setWavePeriod(period);
-            setWarningStatus(warning ?? "정상");
-            setLoading(false);
-            return;
-          }
-        }
         const meteoRes = await axios.get(
-          `https://marine-api.open-meteo.com/v1/marine?latitude=${spot.lat}&longitude=${spot.lon}&hourly=wave_height,wave_period&timezone=Asia%2FSeoul&forecast_days=1`,
+          `https://marine-api.open-meteo.com/v1/marine?latitude=${spot.apiLat}&longitude=${spot.apiLon}&hourly=wave_height,wave_direction,wave_period&timezone=Asia%2FSeoul&forecast_days=1`,
         );
         const h = new Date().getHours();
-        const height = meteoRes.data.hourly.wave_height[h];
-        const period = meteoRes.data.hourly.wave_period[h];
+        const rawHeight = meteoRes.data.hourly.wave_height[h] ?? 0;
+        const waveDir   = meteoRes.data.hourly.wave_direction[h] ?? 0;
+        const period    = meteoRes.data.hourly.wave_period[h] ?? 0;
+        const shelter   = SPOT_SHELTER[spot.id];
+        const height    = shelter
+          ? parseFloat((rawHeight * shelter.shelterFactor * swellEff(waveDir, shelter.swellWindow)).toFixed(2))
+          : rawHeight;
         let warning = "정상";
         try {
           const kmaRes = await axios.get(
@@ -135,27 +163,10 @@ export default function HomeScreen() {
           else if (inArea && raw.includes("주의보")) warning = "풍랑주의보";
         } catch (_) {}
         setWarningStatus(warning);
-        const model = genAI.getGenerativeModel({
-          model: "gemini-3.1-flash-lite",
-          generationConfig: { maxOutputTokens: 300 },
-        });
-        const result = await model.generateContent({
-          contents: [{ role: "user", parts: [{ text:
-            `아래 예시처럼 딱 한 줄만 출력해. 다른 말 없이.\n\n` +
-            `파고0.2m 파주기5s → 오늘의 송정파도는 발목~무릎, 슈트 3mm추천, 롱보드 입문 연습 좋음\n` +
-            `파고0.6m 파주기8s → 오늘의 송정파도는 무릎~허리, 슈트 3mm추천, 롱보드·펀보드 재밌게 타기 좋음\n` +
-            `파고1.2m 파주기10s → 오늘의 송정파도는 허리~가슴, 슈트 3mm추천, 숏보드 실력 향상 좋음\n` +
-            `파고1.8m 파주기12s → 오늘의 송정파도는 가슴~머리, 슈트 3mm추천, 숏보드 고수만 출격\n\n` +
-            `파고${height}m 파주기${period}s 특보:${warning} 스팟:${spot.name} →`,
-          }] }],
-        });
-        const briefingText = result.response.text().trim();
-        setSurfBriefing(briefingText);
         setWaveHeight(height);
         setWavePeriod(period);
-        await AsyncStorage.setItem(cacheKey, JSON.stringify({ content: briefingText, height, period, warning, timestamp: Date.now() }));
       } catch (err: any) {
-        setSurfBriefing(`분석 실패: ${err.message ?? String(err)}`);
+        // fetch 실패 시 수치 없이 진행
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -165,7 +176,7 @@ export default function HomeScreen() {
   );
 
   useEffect(() => {
-    if (!spotInitialized || activeSpots.length === 0) return;
+    if (!spotInitialized) return;
     getSurfForecast();
   }, [spotInitialized, getSurfForecast]);
 
@@ -191,7 +202,6 @@ export default function HomeScreen() {
   };
 
   const condition = waveHeight !== null ? getCondition(waveHeight, C) : null;
-  const timeStr   = new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
   const multtae   = useMemo(() => calcMulttae(new Date(), C), [C]);
   const todayTip  = SURF_TIPS[new Date().getDay()];
   const noSpotSet = profileReady && (userProfile?.selectedSpotIds ?? []).length === 0;
@@ -241,7 +251,7 @@ export default function HomeScreen() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => { setRefreshing(true); getSurfForecast(selectedSpot, true); }}
+            onRefresh={() => { setRefreshing(true); getSurfForecast(selectedSpot); }}
             tintColor={C.primary}
           />
         }
@@ -251,15 +261,9 @@ export default function HomeScreen() {
             <Text style={styles.headerSub}>Good surfing 🤙</Text>
             <Text style={styles.headerTitle}>파도 브리핑</Text>
           </View>
-          <View style={styles.headerRight}>
-            <View style={styles.timeBadge}>
-              <View style={styles.liveDot} />
-              <Text style={styles.timeText}>{timeStr}</Text>
-            </View>
-            <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-              <LogOut size={16} color={C.textSubtle} />
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+            <LogOut size={16} color={C.textSubtle} />
+          </TouchableOpacity>
         </View>
 
         {(warningStatus === "풍랑경보" || warningStatus === "풍랑주의보") && (
@@ -314,47 +318,80 @@ export default function HomeScreen() {
                 <Text style={styles.statValue}>{wavePeriod !== null ? `${Math.round(wavePeriod)}s` : "--"}</Text>
                 <Text style={styles.statLabel}>주기</Text>
               </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statBox}>
-                <Text style={styles.statValue}>AI</Text>
-                <Text style={styles.statLabel}>코치</Text>
-              </View>
             </View>
           )}
         </View>
 
-        <View style={styles.briefingCard}>
-          <View style={styles.briefingTop}>
-            <View style={styles.coachBadge}><Text style={styles.coachBadgeText}>🏄 Glassy AI 코치</Text></View>
-            <Text style={styles.briefingTitle}>오늘의 브리핑</Text>
-          </View>
-          {loading ? (
-            <View style={styles.loadingRow}>
-              <ActivityIndicator size="small" color={C.primary} />
-              <Text style={styles.loadingText}>Gemini 분석 중...</Text>
+        {/* ── 오늘 서핑 가능? 판단 카드 ── */}
+        {!loading && waveHeight !== null && (() => {
+          const h = waveHeight;
+          let level: "beginner" | "intermediate" | "advanced" | "flat" | "danger";
+          let emoji: string, title: string, desc: string, bg: string, border: string, textCol: string;
+          if (h < 0.5) {
+            level = "flat"; emoji = "😴"; title = "오늘은 쉬어요";
+            desc = "파도가 거의 없어요. 물놀이나 SUP은 좋아요!";
+            bg = C.bgCard; border = C.border; textCol = C.textMuted;
+          } else if (h < 1.0) {
+            level = "beginner"; emoji = "✅"; title = "초보자 추천!";
+            desc = "무릎~허리 파도. 팝업 연습하기 딱 좋은 날!";
+            bg = "rgba(16,185,129,0.08)"; border = "rgba(16,185,129,0.35)"; textCol = "#10B981";
+          } else if (h < 1.8) {
+            level = "intermediate"; emoji = "🤙"; title = "중급 이상 추천!";
+            desc = "허리~가슴 파도. 제대로 된 서핑 즐기기 좋아요.";
+            bg = "rgba(14,165,233,0.08)"; border = "rgba(14,165,233,0.35)"; textCol = C.primary;
+          } else if (h < 2.5) {
+            level = "advanced"; emoji = "⚡"; title = "상급자 전용";
+            desc = "가슴~머리 파도. 경험 있는 서퍼만 출동!";
+            bg = "rgba(249,115,22,0.08)"; border = "rgba(249,115,22,0.35)"; textCol = "#F97316";
+          } else {
+            level = "danger"; emoji = "🔴"; title = "위험 — 자제 권고";
+            desc = "오버헤드 이상의 강한 파도. 전문가 외 자제하세요.";
+            bg = "rgba(239,68,68,0.08)"; border = "rgba(239,68,68,0.35)"; textCol = "#EF4444";
+          }
+          return (
+            <View style={[styles.canSurfCard, { backgroundColor: bg, borderColor: border }]}>
+              <View style={styles.canSurfLeft}>
+                <Text style={styles.canSurfEmoji}>{emoji}</Text>
+                <View>
+                  <Text style={styles.canSurfHint}>오늘 서핑 가능?</Text>
+                  <Text style={[styles.canSurfTitle, { color: textCol }]}>{title}</Text>
+                  <Text style={styles.canSurfDesc}>{desc}</Text>
+                </View>
+              </View>
+              <View style={styles.canSurfLevelCol}>
+                {[
+                  { lv: "초보", ok: level === "beginner" || level === "intermediate" || level === "advanced" },
+                  { lv: "중급", ok: level === "intermediate" || level === "advanced" },
+                  { lv: "고급", ok: level === "advanced" || level === "danger" },
+                ].map(({ lv, ok }) => (
+                  <View key={lv} style={styles.canSurfLevelRow}>
+                    <View style={[styles.canSurfDot, { backgroundColor: ok ? textCol : C.border }]} />
+                    <Text style={[styles.canSurfLevelText, ok && { color: textCol, fontWeight: "700" }]}>{lv}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
-          ) : (
-            <Text style={styles.briefingText}>{surfBriefing}</Text>
-          )}
-          <TouchableOpacity style={styles.refreshBtn} onPress={() => getSurfForecast(selectedSpot, true)}>
-            <Text style={styles.refreshBtnText}>↻ 새로고침</Text>
-          </TouchableOpacity>
-        </View>
+          );
+        })()}
 
-        <Text style={styles.sectionLabel}>📍 스팟 바로가기</Text>
-        <View style={styles.spotGrid}>
-          {ALL_SPOTS.map(spot => (
-            <TouchableOpacity key={spot.id} style={styles.spotQuickCard} onPress={() => router.push(`/spot/${spot.id}` as any)}>
-              <View style={styles.spotQuickEmojiWrap}>
-                <Text style={styles.spotQuickEmoji}>{spot.emoji}</Text>
-              </View>
-              <View style={styles.spotQuickInfo}>
-                <Text style={styles.spotQuickName}>{spot.name}</Text>
-                <Text style={styles.spotQuickArrow}>보기 →</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {activeSpots.length > 0 && (
+          <>
+            <Text style={styles.sectionLabel}>📍 스팟 바로가기</Text>
+            <View style={styles.spotGrid}>
+              {activeSpots.map(spot => (
+                <TouchableOpacity key={spot.id} style={styles.spotQuickCard} onPress={() => router.push(`/spot/${spot.id}` as any)}>
+                  <View style={styles.spotQuickEmojiWrap}>
+                    <Text style={styles.spotQuickEmoji}>{spot.emoji}</Text>
+                  </View>
+                  <View style={styles.spotQuickInfo}>
+                    <Text style={styles.spotQuickName}>{spot.name}</Text>
+                    <Text style={styles.spotQuickArrow}>보기 →</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        )}
 
         <View style={styles.tidalCard}>
           <View style={styles.tidalLeft}>
@@ -388,11 +425,7 @@ function makeStyles(C: ThemeColors) {
     header:      { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 },
     headerSub:   { color: C.textMuted, fontSize: 13, fontWeight: "600", marginBottom: 4 },
     headerTitle: { color: C.text, fontSize: 26, fontWeight: "800" },
-    headerRight: { alignItems: "flex-end", gap: 8 },
     logoutBtn:   { padding: 4 },
-    timeBadge:   { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: C.bgCard, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: C.border },
-    liveDot:     { width: 7, height: 7, borderRadius: 3.5, backgroundColor: C.success },
-    timeText:    { color: C.textMuted, fontSize: 12, fontWeight: "700" },
 
     emptyCard:     { backgroundColor: C.bgCard, borderRadius: 24, padding: 32, alignItems: "center", gap: 12, borderWidth: 1, borderColor: C.border, width: "100%" },
     emptyTitle:    { color: C.text, fontSize: 20, fontWeight: "800", marginTop: 8 },
@@ -450,13 +483,17 @@ function makeStyles(C: ThemeColors) {
     tipTitle: { color: C.textMuted, fontSize: 12, fontWeight: "800", marginBottom: 8 },
     tipText:  { color: C.text, fontSize: 15, lineHeight: 23, fontWeight: "600" },
 
-    briefingCard:   { backgroundColor: C.bgCard, borderRadius: 24, padding: 22, borderWidth: 1, borderColor: C.border, marginBottom: 14 },
-    briefingTop:    { marginBottom: 14 },
-    coachBadge:     { alignSelf: "flex-start", backgroundColor: "rgba(14,165,233,0.12)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1, borderColor: "rgba(14,165,233,0.25)", marginBottom: 8 },
-    coachBadgeText: { color: C.primary, fontSize: 12, fontWeight: "700" },
-    briefingTitle:  { color: C.text, fontSize: 17, fontWeight: "800" },
-    briefingText:   { color: C.textMuted, fontSize: 16, lineHeight: 26, fontWeight: "600", marginBottom: 18 },
-    refreshBtn:     { alignSelf: "flex-start", paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, borderWidth: 1, borderColor: C.border },
-    refreshBtnText: { color: C.textMuted, fontSize: 13, fontWeight: "700" },
+
+    // 서핑 가능 판단 카드
+    canSurfCard:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderRadius: 20, padding: 18, borderWidth: 1.5, marginBottom: 14 },
+    canSurfLeft:       { flexDirection: "row", alignItems: "flex-start", gap: 12, flex: 1 },
+    canSurfEmoji:      { fontSize: 28, lineHeight: 32 },
+    canSurfHint:       { color: C.textSubtle, fontSize: 11, fontWeight: "700", marginBottom: 2 },
+    canSurfTitle:      { fontSize: 16, fontWeight: "800", marginBottom: 3 },
+    canSurfDesc:       { color: C.textMuted, fontSize: 12, lineHeight: 18, maxWidth: 200 },
+    canSurfLevelCol:   { gap: 5 },
+    canSurfLevelRow:   { flexDirection: "row", alignItems: "center", gap: 5 },
+    canSurfDot:        { width: 7, height: 7, borderRadius: 3.5 },
+    canSurfLevelText:  { color: C.textSubtle, fontSize: 11, fontWeight: "600" },
   });
 }

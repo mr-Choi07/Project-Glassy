@@ -1,6 +1,7 @@
 import { Colors } from "@/constants/theme";
 import { useAuth } from "@/context/AuthContext";
 import { FontAwesome } from "@expo/vector-icons";
+import * as AuthSession from "expo-auth-session";
 import * as Google from "expo-auth-session/providers/google";
 import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
@@ -9,6 +10,7 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -22,8 +24,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 WebBrowser.maybeCompleteAuthSession();
 
 // Firebase Console → Authentication → Sign-in method → Google → Web SDK configuration → Web client ID
-// 예: "557420012496-xxxxxxxxxxxx.apps.googleusercontent.com"
 const GOOGLE_WEB_CLIENT_ID = "621951191738-i394sbngqukd6fqjo10chmsrh4qkk0lm.apps.googleusercontent.com";
+
+// Google Cloud Console → API 및 서비스 → 사용자 인증 정보 → iOS 앱용 OAuth 2.0 클라이언트 ID
+// 번들 ID: com.seungjae.glassy 로 생성 후 아래에 입력
+const GOOGLE_IOS_CLIENT_ID = "621951191738-dmps3j5sieg86fq929tk5ukp59h26elc.apps.googleusercontent.com";  // TODO: iOS 클라이언트 ID 입력 필요
+
+// Google Cloud Console → API 및 서비스 → 사용자 인증 정보 → Android 앱용 OAuth 2.0 클라이언트 ID
+const GOOGLE_ANDROID_CLIENT_ID = "621951191738-vutdheqr1jm6vjfhubp71tki9vpiuo9g.apps.googleusercontent.com"; // TODO: Android 클라이언트 ID 입력 필요
 
 const FIREBASE_ERRORS: Record<string, string> = {
   "auth/invalid-email": "이메일 형식이 올바르지 않습니다.",
@@ -45,11 +53,18 @@ export default function LoginScreen() {
   const [pwFocus, setPwFocus] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [resetModal, setResetModal] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+
+  // Expo Go 테스트용 프록시 리다이렉트 URI
+  // Google Cloud Console 웹 클라이언트 → 승인된 리디렉션 URI에 아래 주소 추가 필요
+  const redirectUri = AuthSession.makeRedirectUri({ scheme: "projectglassy" });
 
   const [, googleResponse, googlePromptAsync] = Google.useIdTokenAuthRequest({
-    webClientId: GOOGLE_WEB_CLIENT_ID || undefined,
-    iosClientId: GOOGLE_WEB_CLIENT_ID || undefined,
-    androidClientId: GOOGLE_WEB_CLIENT_ID || undefined,
+    webClientId: GOOGLE_WEB_CLIENT_ID,
+    iosClientId: GOOGLE_IOS_CLIENT_ID || GOOGLE_WEB_CLIENT_ID,
+    androidClientId: GOOGLE_ANDROID_CLIENT_ID || GOOGLE_WEB_CLIENT_ID,
+    redirectUri,
   });
 
   useEffect(() => {
@@ -75,21 +90,34 @@ export default function LoginScreen() {
   };
 
   const handleGoogleLogin = async () => {
+    if (Platform.OS === "web") {
+      setLoading(true);
+      setError("");
+      try {
+        await loginWithGooglePopup();
+        router.replace("/(tabs)");
+      } catch (e: any) {
+        setError(`Google 오류: ${e.code ?? e.message ?? String(e)}`);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // 네이티브: iOS/Android 전용 클라이언트 ID 미설정 안내
+    const missingId = Platform.OS === "ios" ? !GOOGLE_IOS_CLIENT_ID : !GOOGLE_ANDROID_CLIENT_ID;
+    if (missingId) {
+      Alert.alert(
+        "Google 로그인 설정 필요",
+        `Google Cloud Console에서 ${Platform.OS === "ios" ? "iOS" : "Android"} OAuth 클라이언트 ID를 생성 후 앱에 입력해주세요.`,
+      );
+      return;
+    }
+
     setLoading(true);
     setError("");
     try {
-      if (Platform.OS === "web") {
-        // 웹: Firebase 내장 팝업 (CORS/OAuth 설정 불필요)
-        await loginWithGooglePopup();
-        router.replace("/(tabs)");
-      } else {
-        // 네이티브: expo-auth-session
-        if (!GOOGLE_WEB_CLIENT_ID) {
-          Alert.alert("Google 로그인 설정 필요", "GOOGLE_WEB_CLIENT_ID를 입력해주세요.");
-          return;
-        }
-        await googlePromptAsync();
-      }
+      await googlePromptAsync();
     } catch (e: any) {
       setError(`Google 오류: ${e.code ?? e.message ?? String(e)}`);
     } finally {
@@ -115,22 +143,22 @@ export default function LoginScreen() {
   };
 
   const handleForgotPassword = () => {
-    Alert.prompt(
-      "비밀번호 재설정",
-      "가입한 이메일을 입력하면 재설정 링크를 보내드립니다.",
-      async (inputEmail) => {
-        if (!inputEmail) return;
-        try {
-          await resetPassword(inputEmail.trim());
-          Alert.alert("전송 완료", `${inputEmail}로 재설정 링크를 전송했습니다.`);
-        } catch {
-          Alert.alert("오류", "이메일을 확인해주세요.");
-        }
-      },
-      "plain-text",
-      email,
-      "email-address",
-    );
+    setResetEmail(email);
+    setResetModal(true);
+  };
+
+  const handleResetSubmit = async () => {
+    if (!resetEmail.trim()) {
+      Alert.alert("오류", "이메일을 입력해주세요.");
+      return;
+    }
+    try {
+      await resetPassword(resetEmail.trim());
+      setResetModal(false);
+      Alert.alert("전송 완료", `${resetEmail}로 재설정 링크를 전송했습니다.`);
+    } catch {
+      Alert.alert("오류", "이메일을 확인해주세요.");
+    }
   };
 
   return (
@@ -231,6 +259,34 @@ export default function LoginScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* 비밀번호 재설정 모달 (Alert.prompt 대체 — Android 호환) */}
+      <Modal visible={resetModal} transparent animationType="fade" onRequestClose={() => setResetModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>비밀번호 재설정</Text>
+            <Text style={styles.modalDesc}>가입한 이메일을 입력하면 재설정 링크를 보내드립니다.</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={resetEmail}
+              onChangeText={setResetEmail}
+              placeholder="example@mail.com"
+              placeholderTextColor={Colors.textSubtle}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoFocus
+            />
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setResetModal(false)}>
+                <Text style={styles.modalCancelText}>취소</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalConfirmBtn} onPress={handleResetSubmit}>
+                <Text style={styles.modalConfirmText}>전송</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -299,4 +355,15 @@ const styles = StyleSheet.create({
   },
   footerText: { color: Colors.textMuted, fontSize: 14 },
   footerLink: { color: Colors.primary, fontSize: 14, fontWeight: "700" },
+
+  modalOverlay:     { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "center", alignItems: "center", padding: 28 },
+  modalBox:         { width: "100%", backgroundColor: Colors.bgCard, borderRadius: 20, padding: 24, borderWidth: 1, borderColor: Colors.border },
+  modalTitle:       { color: Colors.text, fontSize: 17, fontWeight: "800", marginBottom: 8 },
+  modalDesc:        { color: Colors.textMuted, fontSize: 13, lineHeight: 20, marginBottom: 16 },
+  modalInput:       { height: 50, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bgSurface, paddingHorizontal: 14, color: Colors.text, fontSize: 15, marginBottom: 20 },
+  modalBtnRow:      { flexDirection: "row", gap: 10 },
+  modalCancelBtn:   { flex: 1, height: 46, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, alignItems: "center", justifyContent: "center" },
+  modalCancelText:  { color: Colors.textMuted, fontSize: 14, fontWeight: "600" },
+  modalConfirmBtn:  { flex: 1, height: 46, borderRadius: 12, backgroundColor: Colors.primary, alignItems: "center", justifyContent: "center" },
+  modalConfirmText: { color: "#fff", fontSize: 14, fontWeight: "700" },
 });

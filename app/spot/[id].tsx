@@ -1,5 +1,3 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import axios from "axios";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ArrowLeft, Thermometer, Waves, Wind } from "lucide-react-native";
@@ -7,66 +5,42 @@ import React, { createElement, useEffect, useMemo, useRef, useState } from "reac
 import {
   ActivityIndicator,
   Image,
-  Linking,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { WebView } from "react-native-webview";
 import { ThemeColors } from "@/constants/theme";
 import { useTheme } from "@/context/ThemeContext";
+import { ALL_SPOTS_FLAT } from "@/constants/spots";
 
-// ─── 스팟 메타데이터 ───────────────────────────────────────────────────────
+// ─── 스팟 메타데이터 (central registry에서 자동 생성) ──────────────────────
 const SPOT_META: Record<string, {
   name: string; region: string;
   lat: number; lon: number;
   apiLat: number; apiLon: number;
-  emoji: string; photo: string; cameraIds?: string[];
-}> = {
-  songjeong: {
-    name: "송정 해수욕장", region: "부산 해운대구",
-    lat: 35.1786, lon: 129.2075,
-    apiLat: 35.1718, apiLon: 129.2218,
-    emoji: "🐚",
-    photo: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=900&q=80",
-    cameraIds: ["tQ9tse8cTy4", "ACK9lGbi2m0"],
-  },
-  haeundae: {
-    name: "해운대 해수욕장", region: "부산 해운대구",
-    lat: 35.1588, lon: 129.1604,
-    apiLat: 35.1466, apiLon: 129.1674,
-    emoji: "🏖️",
-    photo: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=900&q=80",
-    cameraIds: ["olQi21eGcwQ"],
-  },
-  dadaepo: {
-    name: "다대포 해수욕장", region: "부산 사하구",
-    lat: 35.0476, lon: 128.9610,
-    apiLat: 35.0365, apiLon: 128.9515,
-    emoji: "🌊",
-    photo: "https://images.unsplash.com/photo-1505118380757-91f5f5632de0?w=900&q=80",
-  },
-  gwanganri: {
-    name: "광안리 해수욕장", region: "부산 수영구",
-    lat: 35.1530, lon: 129.1185,
-    apiLat: 35.1395, apiLon: 129.1185,
-    emoji: "🌉",
-    photo: "https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=900&q=80",
-    cameraIds: ["jmVmZlsQIL8"],
-  },
-};
+  emoji: string; photo: string;
+}> = Object.fromEntries(
+  ALL_SPOTS_FLAT.map(s => [s.id, {
+    name: s.name,
+    region: s.region,
+    lat: s.lat, lon: s.lon,
+    apiLat: s.apiLat, apiLon: s.apiLon,
+    emoji: s.emoji,
+    photo: s.photo ?? "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=900&q=80",
+  }])
+);
 
-const SPOT_CONFIG: Record<string, { aspect: number; swellWindow: [number, number]; shelterFactor: number }> = {
-  songjeong: { aspect: 120, swellWindow: [55,  205], shelterFactor: 0.95 },
-  haeundae:  { aspect: 155, swellWindow: [100, 220], shelterFactor: 0.80 },
-  dadaepo:   { aspect: 215, swellWindow: [155, 270], shelterFactor: 0.75 },
-  gwanganri: { aspect: 180, swellWindow: [145, 215], shelterFactor: 0.35 },
-};
+const SPOT_CONFIG: Record<string, { aspect: number; swellWindow: [number, number]; shelterFactor: number }> = Object.fromEntries(
+  ALL_SPOTS_FLAT.map(s => [s.id, {
+    aspect: s.aspect,
+    swellWindow: s.swellWindow,
+    shelterFactor: s.shelterFactor,
+  }])
+);
 
 function swellEff(waveDir: number, win: [number, number]): number {
   const a = ((waveDir % 360) + 360) % 360;
@@ -125,9 +99,9 @@ const waveColor = (h: number, C: ThemeColors) =>
 const waveBg = (h: number) =>
   h < 0.5 ? "rgba(100,116,139,0.15)" : h < 1.0 ? "rgba(34,197,94,0.18)" : h < 1.8 ? "rgba(14,165,233,0.2)" : h < 2.5 ? "rgba(249,115,22,0.22)" : "rgba(239,68,68,0.22)";
 const windColor = (w: number) =>
-  w < 10 ? "#22C55E" : w < 20 ? "#EAB308" : w < 40 ? "#F97316" : "#EF4444";
+  w < 3 ? "#22C55E" : w < 6 ? "#EAB308" : w < 11 ? "#F97316" : "#EF4444";
 const windBg = (w: number) =>
-  w < 10 ? "rgba(34,197,94,0.15)" : w < 20 ? "rgba(234,179,8,0.18)" : w < 40 ? "rgba(249,115,22,0.2)" : "rgba(239,68,68,0.2)";
+  w < 3 ? "rgba(34,197,94,0.15)" : w < 6 ? "rgba(234,179,8,0.18)" : w < 11 ? "rgba(249,115,22,0.2)" : "rgba(239,68,68,0.2)";
 const tempColor = (t: number, C: ThemeColors) =>
   t < 15 ? "#60A5FA" : t < 20 ? C.primary : t < 25 ? "#22C55E" : "#F97316";
 const tempBg = (t: number) =>
@@ -153,105 +127,32 @@ function calcMulttae(date: Date, C: ThemeColors) {
   return { number: m, label, desc, color };
 }
 
-async function fetchAiRec(spotName: string, cur: HourData, multtaeLabel: string): Promise<string> {
-  const cacheKey = `glassy_ai_${spotName}_${new Date().toISOString().split("T")[0]}`;
-  try { const c = await AsyncStorage.getItem(cacheKey); if (c) return c; } catch (_) {}
-  const prompt =
-    `서핑코치. 3줄만(이모지포함).\n` +
-    `${spotName} 파고${cur.waveHeight.toFixed(1)}m 파주기${cur.wavePeriod.toFixed(0)}s ` +
-    `풍속${cur.windSpeed.toFixed(0)}km/h 수온${cur.waterTemp.toFixed(0)}°C 물때${multtaeLabel}\n` +
-    `1)적합레벨 2)슈트두께 3)보드추천`;
-  try {
-    const ai = new GoogleGenerativeAI(process.env.EXPO_PUBLIC_GEMINI_API_KEY!);
-    const model = ai.getGenerativeModel({
-      model: "gemini-2.0-flash-lite",
-      generationConfig: { maxOutputTokens: 400 },
-    });
-    const result = await model.generateContent({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-    });
-    const text = result.response.text().trim();
-    AsyncStorage.setItem(cacheKey, text).catch(() => {});
-    return text;
-  } catch (e: any) {
-    return `AI 추천 불가 (${e?.message ?? "오류"})`;
-  }
-}
+function getSpotRec(cur: HourData): string {
+  const { waveHeight, waterTemp } = cur;
 
-// ─── 라이브 카메라 ────────────────────────────────────────────────────────
-function LiveCamera({ cameraId, name }: { cameraId: string; name: string }) {
-  const { colors: C } = useTheme();
-  const { width } = useWindowDimensions();
-  const [embedBlocked, setEmbedBlocked] = useState(false);
-  const videoH = Math.round((width - 32) * 9 / 16);
+  let skill: string;
+  if (waveHeight < 0.3)      skill = "🔵 적합레벨: 잔잔 (패들링·입문 연습)";
+  else if (waveHeight < 0.6) skill = "🟢 적합레벨: 입문~초보";
+  else if (waveHeight < 1.0) skill = "🟡 적합레벨: 초보~중급";
+  else if (waveHeight < 1.5) skill = "🟠 적합레벨: 중급~상급";
+  else if (waveHeight < 2.5) skill = "🔴 적합레벨: 상급 전용";
+  else                        skill = "⛔ 적합레벨: 출수 금지 수준";
 
-  const embedUrl = `https://www.youtube.com/embed/${cameraId}?autoplay=1&mute=1&rel=0&playsinline=1&modestbranding=1&iv_load_policy=3`;
+  let suit: string;
+  if (waterTemp < 14)      suit = "슈트: 5mm 풀슈트 필수";
+  else if (waterTemp < 17) suit = "슈트: 4/3mm 풀슈트 추천";
+  else if (waterTemp < 21) suit = "슈트: 3mm 풀슈트 추천";
+  else if (waterTemp < 24) suit = "슈트: 2mm 스프링슈트 추천";
+  else                      suit = "슈트: 래쉬가드 가능";
 
-  const openInYouTube = async () => {
-    const appUrl = Platform.OS === "ios" ? `youtube://${cameraId}` : `vnd.youtube://${cameraId}`;
-    const webUrl = `https://www.youtube.com/watch?v=${cameraId}`;
-    try { await Linking.openURL(appUrl); }
-    catch { await Linking.openURL(webUrl); }
-  };
+  let board: string;
+  if (waveHeight < 0.4)      board = "보드: 패들보드·롱보드 추천";
+  else if (waveHeight < 0.8) board = "보드: 롱보드 추천";
+  else if (waveHeight < 1.3) board = "보드: 롱보드·숏보드 추천";
+  else if (waveHeight < 2.0) board = "보드: 숏보드 추천";
+  else                        board = "보드: 숏보드 추천 (상급자)";
 
-  if (Platform.OS === "web") {
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const webEmbedUrl = `${embedUrl}${origin ? `&origin=${encodeURIComponent(origin)}` : ""}`;
-    const MASK = "#050B14";
-    return createElement("div",
-      { style: { position: "relative", overflow: "hidden", borderRadius: 14, border: `1px solid ${C.border}` } },
-      createElement("div",
-        { style: { position: "relative", paddingTop: "56.25%" } },
-        createElement("iframe", {
-          src: webEmbedUrl,
-          style: { position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" },
-          allow: "autoplay; encrypted-media; fullscreen",
-          allowFullscreen: true,
-          title: `${name} 라이브 카메라`,
-        }),
-      ),
-      createElement("div", { style: { position: "absolute", top: 0, left: 0, right: 0, height: 62, backgroundColor: MASK } }),
-      createElement("div", { style: { position: "absolute", bottom: 0, left: 0, right: 0, height: 52, backgroundColor: MASK } }),
-    );
-  }
-
-  if (embedBlocked) {
-    return (
-      <View style={{ height: videoH, borderRadius: 14, overflow: "hidden", borderWidth: 1, borderColor: C.border, backgroundColor: C.bgSurface, justifyContent: "center", alignItems: "center", gap: 16, padding: 24 }}>
-        <Text style={{ fontSize: 38 }}>📹</Text>
-        <View style={{ alignItems: "center", gap: 6 }}>
-          <Text style={{ color: C.text, fontSize: 15, fontWeight: "700" }}>{name} 라이브</Text>
-          <Text style={{ color: C.textSubtle, fontSize: 13, textAlign: "center", lineHeight: 20 }}>
-            실시간 영상은 YouTube 앱에서{"\n"}확인할 수 있어요
-          </Text>
-        </View>
-        <TouchableOpacity
-          style={{ flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#FF0000", paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24 }}
-          onPress={openInYouTube}
-        >
-          <Text style={{ color: "#fff", fontSize: 14, fontWeight: "800" }}>▶  YouTube에서 보기</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  return (
-    <View style={{ height: videoH, borderRadius: 14, overflow: "hidden", borderWidth: 1, borderColor: C.border, backgroundColor: "#000" }}>
-      <WebView
-        source={{ uri: embedUrl, headers: { Referer: "https://www.youtube.com" } }}
-        style={{ flex: 1, backgroundColor: "#000" }}
-        allowsInlineMediaPlayback
-        mediaPlaybackRequiresUserAction={false}
-        javaScriptEnabled
-        domStorageEnabled
-        allowsFullscreenVideo
-        originWhitelist={["*"]}
-        mixedContentMode="always"
-        onHttpError={(e) => { if (e.nativeEvent.statusCode >= 400) setEmbedBlocked(true); }}
-        onError={() => setEmbedBlocked(true)}
-      />
-    </View>
-  );
+  return `${skill}\n${suit}\n${board}`;
 }
 
 // ─── 지도 ─────────────────────────────────────────────────────────────────
@@ -273,11 +174,10 @@ function MapView({ lat, lon, name }: { lat: number; lon: number; name: string })
 }
 
 // ─── 간단 모드 카드 ───────────────────────────────────────────────────────
-function SimpleCard({ cur, mt, aiRec, aiLoading, spotId }: {
+function SimpleCard({ cur, mt, aiRec, spotId }: {
   cur: HourData;
   mt: { number: number; label: string; desc: string; color: string } | null;
   aiRec: string;
-  aiLoading: boolean;
   spotId: string;
 }) {
   const { colors: C } = useTheme();
@@ -311,7 +211,7 @@ function SimpleCard({ cur, mt, aiRec, aiLoading, spotId }: {
       )}
       <View style={siS.grid}>
         <SiMetric emoji="💨" label="풍향·풍속"
-          value={`${dirLabel(cur.windDirection)} ${windArrow(cur.windDirection)} ${cur.windSpeed.toFixed(0)}km/h`}
+          value={`${dirLabel(cur.windDirection)} ${windArrow(cur.windDirection)} ${cur.windSpeed.toFixed(1)}m/s`}
           color={windColor(cur.windSpeed)} C={C} />
         <SiMetric emoji="🌡" label="기온 / 수온"
           value={`${cur.airTemp.toFixed(0)}°C / ${cur.waterTemp.toFixed(0)}°C`}
@@ -323,10 +223,7 @@ function SimpleCard({ cur, mt, aiRec, aiLoading, spotId }: {
       </View>
       <View style={siS.aiRow}>
         <Text style={siS.aiIcon}>✨</Text>
-        {aiLoading
-          ? <ActivityIndicator size="small" color={C.primary} style={{ marginLeft: 4 }} />
-          : <Text style={siS.aiText} numberOfLines={4}>{aiRec || "AI 추천 불러오는 중..."}</Text>
-        }
+        <Text style={siS.aiText} numberOfLines={4}>{aiRec || "데이터 불러오는 중..."}</Text>
       </View>
     </View>
   );
@@ -396,8 +293,8 @@ function DetailCard({ cur, mt, lastUpdate }: {
       <Text style={dtS.sec}>💨 바람</Text>
       <View style={dtS.row3}>
         <DtItem label="풍향" value={`${dirLabel(cur.windDirection)} ${windArrow(cur.windDirection)}`} C={C} />
-        <DtItem label="풍속" value={`${cur.windSpeed.toFixed(0)}km/h`} color={windColor(cur.windSpeed)} C={C} />
-        <DtItem label="돌풍" value={`${cur.windGusts.toFixed(0)}km/h`} color={cur.windGusts > 40 ? "#EF4444" : undefined} C={C} />
+        <DtItem label="풍속" value={`${cur.windSpeed.toFixed(1)}m/s`} color={windColor(cur.windSpeed)} C={C} />
+        <DtItem label="돌풍" value={`${cur.windGusts.toFixed(1)}m/s`} color={cur.windGusts > 11 ? "#EF4444" : undefined} C={C} />
       </View>
       <View style={dtS.divider} />
       <Text style={dtS.sec}>🌡 기상</Text>
@@ -463,9 +360,9 @@ function makeDetailS(C: ThemeColors) {
 }
 
 // ─── 시간별 테이블 ────────────────────────────────────────────────────────
-const COL_W = 72;
-const ROW_H = { time: 44, main: 70, sub: 50 };
-const LABEL_W = 74;
+const COL_W = 86;
+const ROW_H = { time: 48, main: 76, sub: 52, weather: 52 };
+const LABEL_W = 80;
 
 function HourlyTable({ hours, currentH }: { hours: HourData[]; currentH: number }) {
   const { colors: C } = useTheme();
@@ -484,12 +381,13 @@ function HourlyTable({ hours, currentH }: { hours: HourData[]; currentH: number 
       <View style={{ flexDirection: "row", backgroundColor: C.bgSurface }}>
         <View style={{ width: LABEL_W, borderRightWidth: 1, borderRightColor: C.border }}>
           {([
-            { label: "시각",     icon: null,                                           h: ROW_H.time },
-            { label: "파고",     icon: <Waves size={14} color={C.primary} />,         h: ROW_H.main },
-            { label: "주기·너울", icon: null,                                           h: ROW_H.sub },
-            { label: "수온",     icon: <Thermometer size={14} color={C.accent} />,    h: ROW_H.main },
-            { label: "풍속",     icon: <Wind size={14} color={C.textMuted} />,        h: ROW_H.main },
-            { label: "강수·UV",  icon: null,                                           h: ROW_H.sub },
+            { label: "시각",     icon: null,                                            h: ROW_H.time },
+            { label: "날씨",     icon: null,                                            h: ROW_H.weather },
+            { label: "파고",     icon: <Waves size={13} color={C.primary} />,          h: ROW_H.main },
+            { label: "주기·너울", icon: null,                                            h: ROW_H.sub },
+            { label: "수온",     icon: <Thermometer size={13} color={C.accent} />,     h: ROW_H.main },
+            { label: "풍속",     icon: <Wind size={13} color={C.textMuted} />,         h: ROW_H.main },
+            { label: "강수·UV",  icon: null,                                            h: ROW_H.sub },
           ] as const).map((row, ri) => (
             <View key={ri} style={[tS.labelCell, { height: row.h, borderTopWidth: ri === 0 ? 0 : 1, borderTopColor: C.border }]}>
               {row.icon}
@@ -499,54 +397,72 @@ function HourlyTable({ hours, currentH }: { hours: HourData[]; currentH: number 
         </View>
         <ScrollView ref={scrollRef} horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
           <View>
+            {/* 시각 행 */}
             <View style={{ flexDirection: "row" }}>
               {hours.map((h, i) => {
                 const now = h.hour === currentH;
                 return (
                   <View key={i} style={[tS.cell, { width: COL_W, height: ROW_H.time, backgroundColor: now ? "rgba(14,165,233,0.18)" : "transparent", borderLeftWidth: i ? 0.5 : 0, borderLeftColor: C.border }]}>
-                    <Text style={{ fontSize: 14, fontWeight: now ? "800" : "600", color: now ? C.primary : C.textMuted }}>{h.hour}시</Text>
+                    <Text style={{ fontSize: 15, fontWeight: now ? "800" : "600", color: now ? C.primary : C.textMuted }}>{h.hour}시</Text>
                     {now && <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: C.primary }} />}
                   </View>
                 );
               })}
             </View>
+            {/* 날씨 행 */}
+            <View style={{ flexDirection: "row", borderTopWidth: 1, borderTopColor: C.border }}>
+              {hours.map((h, i) => {
+                const wea = getWeather(h.weatherCode);
+                return (
+                  <View key={i} style={[tS.cell, { width: COL_W, height: ROW_H.weather, borderLeftWidth: i ? 0.5 : 0, borderLeftColor: C.border }]}>
+                    <Text style={{ fontSize: 22 }}>{wea.emoji}</Text>
+                    <Text style={{ fontSize: 10, color: C.textSubtle, fontWeight: "600" }} numberOfLines={1}>{wea.text}</Text>
+                  </View>
+                );
+              })}
+            </View>
+            {/* 파고 행 */}
             <View style={{ flexDirection: "row", borderTopWidth: 1, borderTopColor: C.border }}>
               {hours.map((h, i) => (
                 <View key={i} style={[tS.cell, { width: COL_W, height: ROW_H.main, backgroundColor: waveBg(h.waveHeight), borderLeftWidth: i ? 0.5 : 0, borderLeftColor: C.border }]}>
-                  <Text style={{ fontSize: 20, fontWeight: "800", color: waveColor(h.waveHeight, C) }}>{h.waveHeight.toFixed(1)}</Text>
-                  <Text style={{ fontSize: 12, color: waveColor(h.waveHeight, C), fontWeight: "700" }}>m</Text>
+                  <Text style={{ fontSize: 22, fontWeight: "800", color: waveColor(h.waveHeight, C) }}>{h.waveHeight.toFixed(1)}</Text>
+                  <Text style={{ fontSize: 11, color: waveColor(h.waveHeight, C), fontWeight: "700" }}>{waveLabel(h.waveHeight)}</Text>
                 </View>
               ))}
             </View>
+            {/* 주기·너울 행 */}
             <View style={{ flexDirection: "row", borderTopWidth: 1, borderTopColor: C.border }}>
               {hours.map((h, i) => (
                 <View key={i} style={[tS.cell, { width: COL_W, height: ROW_H.sub, borderLeftWidth: i ? 0.5 : 0, borderLeftColor: C.border }]}>
-                  <Text style={{ fontSize: 13, color: C.textMuted, fontWeight: "700" }}>{h.wavePeriod.toFixed(0)}s</Text>
-                  <Text style={{ fontSize: 13, color: C.textSubtle }}>{h.swellHeight.toFixed(1)}m</Text>
+                  <Text style={{ fontSize: 14, color: C.textMuted, fontWeight: "700" }}>{h.wavePeriod.toFixed(0)}s</Text>
+                  <Text style={{ fontSize: 12, color: C.textSubtle }}>너울 {h.swellHeight.toFixed(1)}m</Text>
                 </View>
               ))}
             </View>
+            {/* 수온 행 */}
             <View style={{ flexDirection: "row", borderTopWidth: 1, borderTopColor: C.border }}>
               {hours.map((h, i) => (
                 <View key={i} style={[tS.cell, { width: COL_W, height: ROW_H.main, backgroundColor: tempBg(h.waterTemp), borderLeftWidth: i ? 0.5 : 0, borderLeftColor: C.border }]}>
-                  <Text style={{ fontSize: 20, fontWeight: "800", color: tempColor(h.waterTemp, C) }}>{h.waterTemp.toFixed(0)}</Text>
-                  <Text style={{ fontSize: 12, color: tempColor(h.waterTemp, C), fontWeight: "700" }}>°C</Text>
+                  <Text style={{ fontSize: 22, fontWeight: "800", color: tempColor(h.waterTemp, C) }}>{h.waterTemp.toFixed(0)}°</Text>
+                  <Text style={{ fontSize: 11, color: tempColor(h.waterTemp, C), fontWeight: "700" }}>기온 {h.airTemp.toFixed(0)}°</Text>
                 </View>
               ))}
             </View>
+            {/* 풍속 행 */}
             <View style={{ flexDirection: "row", borderTopWidth: 1, borderTopColor: C.border }}>
               {hours.map((h, i) => (
                 <View key={i} style={[tS.cell, { width: COL_W, height: ROW_H.main, backgroundColor: windBg(h.windSpeed), borderLeftWidth: i ? 0.5 : 0, borderLeftColor: C.border }]}>
-                  <Text style={{ fontSize: 18, fontWeight: "800", color: windColor(h.windSpeed) }}>{windArrow(h.windDirection)}{h.windSpeed.toFixed(0)}</Text>
-                  <Text style={{ fontSize: 12, color: windColor(h.windSpeed) }}>km/h</Text>
+                  <Text style={{ fontSize: 20, fontWeight: "800", color: windColor(h.windSpeed) }}>{windArrow(h.windDirection)} {h.windSpeed.toFixed(1)}</Text>
+                  <Text style={{ fontSize: 11, color: windColor(h.windSpeed), fontWeight: "600" }}>m/s</Text>
                 </View>
               ))}
             </View>
+            {/* 강수·UV 행 */}
             <View style={{ flexDirection: "row", borderTopWidth: 1, borderTopColor: C.border }}>
               {hours.map((h, i) => (
                 <View key={i} style={[tS.cell, { width: COL_W, height: ROW_H.sub, borderLeftWidth: i ? 0.5 : 0, borderLeftColor: C.border }]}>
-                  <Text style={{ fontSize: 13, color: C.textMuted, fontWeight: "700" }}>☔{h.precipitation}%</Text>
-                  <Text style={{ fontSize: 13, color: C.textSubtle }}>UV{h.uvIndex.toFixed(0)}</Text>
+                  <Text style={{ fontSize: 14, color: h.precipitation > 50 ? "#60A5FA" : C.textMuted, fontWeight: "700" }}>☔ {h.precipitation}%</Text>
+                  <Text style={{ fontSize: 12, color: C.textSubtle }}>UV {h.uvIndex.toFixed(0)}</Text>
                 </View>
               ))}
             </View>
@@ -591,7 +507,7 @@ function DayForecastCard({ day, onClose }: { day: DayDetail; onClose: () => void
       </View>
       <View style={dfS.grid}>
         <DfMetric emoji="💨" label="풍향·풍속"
-          value={`${dirLabel(day.windDir)} ${windArrow(day.windDir)} ${day.wind.toFixed(0)}km/h`}
+          value={`${dirLabel(day.windDir)} ${windArrow(day.windDir)} ${day.wind.toFixed(1)}m/s`}
           color={windColor(day.wind)} C={C} />
         <DfMetric emoji="🌡" label="기온 / 수온"
           value={`${day.airTemp.toFixed(0)}°C / ${day.temp.toFixed(0)}°C`}
@@ -698,15 +614,13 @@ export default function SpotDetailScreen() {
   const [dayMode,     setDayMode]    = useState<"simple" | "detail">("simple");
   const [todayHours,  setTodayHours] = useState<HourData[]>([]);
   const [weekData,    setWeekData]   = useState<{ labels: string[]; wave: number[]; temp: number[]; wind: number[]; details: DayDetail[] } | null>(null);
+  const [weekHours,   setWeekHours]  = useState<HourData[][]>([]);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [fetching,    setFetching]   = useState(true);
   const [lastUpdate,  setLastUpdate] = useState("");
   const [aiRec,       setAiRec]      = useState("");
-  const [aiLoading,   setAiLoading]  = useState(false);
   const [multtae,     setMulttae]    = useState<{ number: number; label: string; desc: string; color: string } | null>(null);
   const [mapOpen,     setMapOpen]    = useState(false);
-  const [camOpen,     setCamOpen]    = useState(false);
-  const [camView,     setCamView]    = useState(0);
   const [currentH]    = useState(new Date().getHours());
 
   useEffect(() => {
@@ -743,9 +657,9 @@ export default function SpotDetailScreen() {
           swellHeight:   m.swell_wave_height[i]         ?? 0,
           swellPeriod:   m.swell_wave_period[i]         ?? 0,
           waterTemp:     m.sea_surface_temperature[i]   ?? 0,
-          windSpeed:     w.wind_speed_10m[i]            ?? 0,
+          windSpeed:     (w.wind_speed_10m[i]   ?? 0) / 3.6,
           windDirection: w.wind_direction_10m[i]        ?? 0,
-          windGusts:     w.wind_gusts_10m[i]            ?? 0,
+          windGusts:     (w.wind_gusts_10m[i]   ?? 0) / 3.6,
           airTemp:       w.temperature_2m[i]            ?? 0,
           precipitation: w.precipitation_probability[i] ?? 0,
           uvIndex:       w.uv_index[i]                  ?? 0,
@@ -774,7 +688,7 @@ export default function SpotDetailScreen() {
           if (m.wave_direction[i]          != null) dd.waveDir.push(m.wave_direction[i]);
           if (m.wave_period[i]             != null) dd.wavePeriod.push(m.wave_period[i]);
           if (m.sea_surface_temperature[i] != null) dd.temp.push(m.sea_surface_temperature[i]);
-          if (w.wind_speed_10m[i]          != null) dd.wind.push(w.wind_speed_10m[i]);
+          if (w.wind_speed_10m[i]          != null) dd.wind.push(w.wind_speed_10m[i] / 3.6);
           if (w.wind_direction_10m[i]      != null) dd.windDir.push(w.wind_direction_10m[i]);
           if (w.temperature_2m[i]          != null) dd.airTemp.push(w.temperature_2m[i]);
           if (w.precipitation_probability[i] != null) dd.precip.push(w.precipitation_probability[i]);
@@ -789,6 +703,36 @@ export default function SpotDetailScreen() {
         };
         const dn  = ["일","월","화","수","목","금","토"];
         const wkE = Object.entries(days).slice(0, 7);
+
+        // 7일 × 24시간 전체 저장 (클릭 시 시간별 표 출력용)
+        const builtWeekHours: HourData[][] = wkE.map(([dateStr]) => {
+          const dayIdxs = times.reduce<number[]>((a, t, i) => { if (t.startsWith(dateStr)) a.push(i); return a; }, []);
+          return dayIdxs.map(i => {
+            const h: HourData = {
+              time: times[i], hour: parseInt(times[i].split("T")[1]),
+              waveHeight:    m.wave_height[i]              ?? 0,
+              waveDirection: m.wave_direction[i]            ?? 0,
+              wavePeriod:    m.wave_period[i]               ?? 0,
+              swellHeight:   m.swell_wave_height[i]         ?? 0,
+              swellPeriod:   m.swell_wave_period[i]         ?? 0,
+              waterTemp:     m.sea_surface_temperature[i]   ?? 0,
+              windSpeed:     (w.wind_speed_10m[i]   ?? 0) / 3.6,
+              windDirection: w.wind_direction_10m[i]        ?? 0,
+              windGusts:     (w.wind_gusts_10m[i]   ?? 0) / 3.6,
+              airTemp:       w.temperature_2m[i]            ?? 0,
+              precipitation: w.precipitation_probability[i] ?? 0,
+              uvIndex:       w.uv_index[i]                  ?? 0,
+              cloudCover:    w.cloud_cover[i]               ?? 0,
+              weatherCode:   w.weather_code[i]              ?? 0,
+            };
+            if (!cfg) return h;
+            const eff = swellEff(h.waveDirection, cfg.swellWindow);
+            const f   = cfg.shelterFactor * eff;
+            return { ...h, waveHeight: parseFloat((h.waveHeight * f).toFixed(2)), swellHeight: parseFloat((h.swellHeight * f).toFixed(2)) };
+          });
+        });
+        setWeekHours(builtWeekHours);
+
         setWeekData({
           labels:  wkE.map(([d]) => dn[new Date(d).getDay()]),
           wave: wkE.map(([, v]) => { const raw = avg(v.wave); const dir = avg(v.waveDir); return cfg ? parseFloat((raw * cfg.shelterFactor * swellEff(dir, cfg.swellWindow)).toFixed(2)) : raw; }),
@@ -809,8 +753,7 @@ export default function SpotDetailScreen() {
         const curIdx = hours.findIndex(h => h.hour === currentH);
         const curH   = hours[curIdx >= 0 ? curIdx : 0];
         if (curH) {
-          setAiLoading(true);
-          fetchAiRec(spot.name, curH, mt.label).then(setAiRec).finally(() => setAiLoading(false));
+          setAiRec(getSpotRec(curH));
         }
       } catch (_) {
         const mt = calcMulttae(new Date(), C);
@@ -821,8 +764,8 @@ export default function SpotDetailScreen() {
           waveDirection: Math.floor(Math.random() * 360), wavePeriod: parseFloat((Math.random() * 5 + 5).toFixed(1)),
           swellHeight: parseFloat((Math.random() * 0.5 + 0.1).toFixed(2)), swellPeriod: parseFloat((Math.random() * 4 + 6).toFixed(1)),
           waterTemp: parseFloat((Math.random() * 4 + 19).toFixed(1)),
-          windSpeed: parseFloat((Math.random() * 20 + 5).toFixed(1)), windDirection: Math.floor(Math.random() * 360),
-          windGusts: parseFloat((Math.random() * 10 + 10).toFixed(1)), airTemp: parseFloat((Math.random() * 6 + 20).toFixed(1)),
+          windSpeed: parseFloat((Math.random() * 5 + 1).toFixed(1)), windDirection: Math.floor(Math.random() * 360),
+          windGusts: parseFloat((Math.random() * 3 + 3).toFixed(1)), airTemp: parseFloat((Math.random() * 6 + 20).toFixed(1)),
           precipitation: Math.floor(Math.random() * 30), uvIndex: parseFloat((Math.random() * 8).toFixed(1)),
           cloudCover: Math.floor(Math.random() * 80), weatherCode: [0,1,2,3,61,80][Math.floor(Math.random() * 6)],
         }));
@@ -871,29 +814,8 @@ export default function SpotDetailScreen() {
             <Text style={s.photoBtnIcon}>📍</Text>
             <Text style={s.photoBtnTxt}>{mapOpen ? "닫기" : "지도"}</Text>
           </TouchableOpacity>
-          {spot.cameraIds && spot.cameraIds.length > 0 && (
-            <TouchableOpacity style={[s.photoBtn, camOpen && s.photoBtnActive]} onPress={() => { setCamOpen(v => !v); setCamView(0); }}>
-              <Text style={s.photoBtnIcon}>📷</Text>
-              <Text style={s.photoBtnTxt}>{camOpen ? "닫기" : "라이브"}</Text>
-            </TouchableOpacity>
-          )}
         </View>
       </View>
-
-      {camOpen && spot.cameraIds && spot.cameraIds.length > 0 && (
-        <View style={s.camWrap}>
-          {spot.cameraIds.length > 1 && (
-            <View style={s.camTabRow}>
-              {spot.cameraIds.map((_, i) => (
-                <TouchableOpacity key={i} style={[s.camTab, camView === i && s.camTabActive]} onPress={() => setCamView(i)}>
-                  <Text style={[s.camTabTxt, camView === i && s.camTabTxtActive]}>뷰 {i + 1}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-          <LiveCamera cameraId={spot.cameraIds[camView]} name={spot.name} />
-        </View>
-      )}
 
       {mapOpen && (
         <View style={s.mapWrap}>
@@ -928,7 +850,7 @@ export default function SpotDetailScreen() {
               </TouchableOpacity>
             </View>
             {curHour && dayMode === "simple" ? (
-              <SimpleCard cur={curHour} mt={multtae} aiRec={aiRec} aiLoading={aiLoading} spotId={id ?? ""} />
+              <SimpleCard cur={curHour} mt={multtae} aiRec={aiRec} spotId={id ?? ""} />
             ) : curHour ? (
               <>
                 <DetailCard cur={curHour} mt={multtae} lastUpdate={lastUpdate} />
@@ -947,12 +869,20 @@ export default function SpotDetailScreen() {
                 <View style={[wS.row, { marginTop: 28 }]}><Thermometer size={15} color={C.accent} /><Text style={[wS.lbl, { color: C.accent }]}>수온 (°C)</Text></View>
                 <WeekBarChart values={weekData.temp} color={C.accent} labels={weekData.labels} max={30}
                   onBarPress={i => setSelectedDay(prev => prev === i ? null : i)} selectedIdx={selectedDay} />
-                <View style={[wS.row, { marginTop: 28 }]}><Wind size={15} color={C.textMuted} /><Text style={[wS.lbl, { color: C.textMuted }]}>풍속 (km/h)</Text></View>
+                <View style={[wS.row, { marginTop: 28 }]}><Wind size={15} color={C.textMuted} /><Text style={[wS.lbl, { color: C.textMuted }]}>풍속 (m/s)</Text></View>
                 <WeekBarChart values={weekData.wind} color="#EAB308" labels={weekData.labels} max={50}
                   onBarPress={i => setSelectedDay(prev => prev === i ? null : i)} selectedIdx={selectedDay} />
               </View>
               {selectedDay !== null && weekData.details[selectedDay] && (
-                <DayForecastCard day={weekData.details[selectedDay]} onClose={() => setSelectedDay(null)} />
+                <>
+                  <DayForecastCard day={weekData.details[selectedDay]} onClose={() => setSelectedDay(null)} />
+                  {weekHours[selectedDay]?.length > 0 && (
+                    <>
+                      <Text style={s.tableTitle}>⏱ 시간별 예보 (예측 데이터)</Text>
+                      <HourlyTable hours={weekHours[selectedDay]} currentH={-1} />
+                    </>
+                  )}
+                </>
               )}
             </>
           ) : null
@@ -983,12 +913,6 @@ function makeMainS(C: ThemeColors) {
     photoBtnIcon:   { fontSize: 14 },
     photoBtnTxt:    { color: "#fff", fontSize: 13, fontWeight: "800" },
 
-    camWrap:         { paddingHorizontal: 16, paddingTop: 10 },
-    camTabRow:       { flexDirection: "row", gap: 8, marginBottom: 8 },
-    camTab:          { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20, backgroundColor: C.bgSurface, borderWidth: 1, borderColor: C.border },
-    camTabActive:    { backgroundColor: "rgba(14,165,233,0.18)", borderColor: C.primary },
-    camTabTxt:       { color: C.textMuted, fontSize: 13, fontWeight: "700" },
-    camTabTxtActive: { color: C.primary },
     mapWrap:         { paddingHorizontal: 16, paddingTop: 10 },
 
     mainTabRow:      { flexDirection: "row", paddingHorizontal: 16, paddingVertical: 10, gap: 8, borderBottomWidth: 1, borderBottomColor: C.border },
