@@ -374,22 +374,45 @@ export default function HomeScreen() {
           );
         })()}
 
+        {/* ── AI 코치 카드 ── */}
+        {!loading && waveHeight !== null && (() => {
+          const h = waveHeight;
+          const score = h < 0.5 ? 20 : h < 1.0 ? 55 : h < 1.8 ? 82 : h < 2.5 ? 70 : 40;
+          const msg =
+            h < 0.5 ? "오늘은 파도가 거의 없어요. 물놀이나 컨디션 관리하기 좋은 날이에요 😴" :
+            h < 1.0 ? "초보자에게 딱 좋은 파도예요! 팝업 연습하기 최고의 날입니다 🤙" :
+            h < 1.8 ? `오늘 ${selectedSpot.name} 파도는 중급 이상에게 적합해요. 제대로 된 라이딩 즐겨보세요 🌊` :
+            h < 2.5 ? "파워풀한 파도예요. 경험 있는 서퍼라면 도전해볼 만해요 ⚡" :
+            "오버헤드 이상의 강한 파도입니다. 안전에 각별히 주의하세요 🔴";
+          return (
+            <View style={styles.aiCard}>
+              <View style={styles.aiCardTop}>
+                <View style={styles.aiChip}><Text style={styles.aiChipText}>✦ AI 코치</Text></View>
+                <View style={styles.scoreWrap}>
+                  <Text style={styles.scoreNum}>{score}</Text>
+                  <Text style={styles.scoreMax}>/100</Text>
+                </View>
+              </View>
+              <View style={styles.aiBubble}>
+                <View style={styles.aiBubbleAvatar}><Text style={styles.aiBubbleAvatarText}>G</Text></View>
+                <Text style={styles.aiBubbleText}>{msg}</Text>
+              </View>
+            </View>
+          );
+        })()}
+
         {activeSpots.length > 0 && (
           <>
             <Text style={styles.sectionLabel}>📍 스팟 바로가기</Text>
-            <View style={styles.spotGrid}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.spotChipsScroll} contentContainerStyle={styles.spotChipsContent}>
               {activeSpots.map(spot => (
-                <TouchableOpacity key={spot.id} style={styles.spotQuickCard} onPress={() => router.push(`/spot/${spot.id}` as any)}>
-                  <View style={styles.spotQuickEmojiWrap}>
-                    <Text style={styles.spotQuickEmoji}>{spot.emoji}</Text>
-                  </View>
-                  <View style={styles.spotQuickInfo}>
-                    <Text style={styles.spotQuickName}>{spot.name}</Text>
-                    <Text style={styles.spotQuickArrow}>보기 →</Text>
-                  </View>
+                <TouchableOpacity key={spot.id} style={styles.spotChip} onPress={() => router.push(`/spot/${spot.id}` as any)}>
+                  <Text style={styles.spotChipEmoji}>{spot.emoji}</Text>
+                  <Text style={styles.spotChipName}>{spot.name}</Text>
+                  <Text style={styles.spotChipArrow}>→</Text>
                 </TouchableOpacity>
               ))}
-            </View>
+            </ScrollView>
           </>
         )}
 
@@ -463,14 +486,26 @@ function makeStyles(C: ThemeColors) {
     statLabel:   { color: C.textSubtle, fontSize: 12, fontWeight: "600" },
     statDivider: { width: 1, height: 36, backgroundColor: C.border },
 
-    sectionLabel:       { color: C.textMuted, fontSize: 13, fontWeight: "800", marginBottom: 10, marginTop: 6 },
-    spotGrid:           { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 14 },
-    spotQuickCard:      { width: "47.5%", flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: C.bgCard, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: C.border },
-    spotQuickEmojiWrap: { width: 40, height: 40, borderRadius: 20, backgroundColor: C.bgSurface, alignItems: "center", justifyContent: "center" },
-    spotQuickEmoji:     { fontSize: 20 },
-    spotQuickInfo:      { flex: 1 },
-    spotQuickName:      { color: C.text, fontSize: 14, fontWeight: "800", marginBottom: 2 },
-    spotQuickArrow:     { color: C.primary, fontSize: 12, fontWeight: "700" },
+    // AI 코치 카드
+    aiCard:            { backgroundColor: C.bgCard, borderRadius: 20, padding: 18, borderWidth: 1, borderColor: C.border, marginBottom: 14 },
+    aiCardTop:         { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
+    aiChip:            { backgroundColor: "rgba(14,165,233,0.15)", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: "rgba(14,165,233,0.3)" },
+    aiChipText:        { color: C.primary, fontSize: 12, fontWeight: "800" },
+    scoreWrap:         { flexDirection: "row", alignItems: "flex-end", gap: 2 },
+    scoreNum:          { color: C.primary, fontSize: 28, fontWeight: "800", lineHeight: 30 },
+    scoreMax:          { color: C.textMuted, fontSize: 13, fontWeight: "600", marginBottom: 2 },
+    aiBubble:          { flexDirection: "row", alignItems: "flex-start", gap: 10, backgroundColor: C.bgSurface, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: C.border },
+    aiBubbleAvatar:    { width: 28, height: 28, borderRadius: 14, backgroundColor: C.primary, alignItems: "center", justifyContent: "center" },
+    aiBubbleAvatarText:{ color: "#fff", fontSize: 13, fontWeight: "800" },
+    aiBubbleText:      { flex: 1, color: C.text, fontSize: 13, lineHeight: 20 },
+
+    sectionLabel:      { color: C.textMuted, fontSize: 13, fontWeight: "800", marginBottom: 10, marginTop: 6 },
+    spotChipsScroll:   { marginBottom: 14 },
+    spotChipsContent:  { gap: 8, paddingRight: 4 },
+    spotChip:          { flexDirection: "row", alignItems: "center", gap: 7, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 20, backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border },
+    spotChipEmoji:     { fontSize: 16 },
+    spotChipName:      { color: C.text, fontSize: 14, fontWeight: "700" },
+    spotChipArrow:     { color: C.primary, fontSize: 13, fontWeight: "700" },
 
     tidalCard:  { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: C.bgCard, borderRadius: 18, padding: 18, borderWidth: 1, borderColor: C.border, marginBottom: 14 },
     tidalLeft:  { flexDirection: "row", alignItems: "center", gap: 14 },
