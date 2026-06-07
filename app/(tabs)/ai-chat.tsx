@@ -164,32 +164,35 @@ export default function AIChatScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={Platform.OS === "android" ? 0 : 0} style={styles.container}>
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <View style={styles.headerIcon}><Waves size={18} color={C.primary} /></View>
-            <View>
-              <Text style={styles.headerTitle}>Glassy AI 코치</Text>
-              <Text style={styles.headerSub}>서핑의 모든 것을 알고 있어요 🤙</Text>
-            </View>
-          </View>
-          <View style={[styles.statusBadge, { borderColor: statusColor + "55" }]}>
-            <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-            <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <View style={styles.headerIcon}><Waves size={18} color={C.primary} /></View>
+          <View>
+            <Text style={styles.headerTitle}>Glassy AI 코치</Text>
+            <Text style={styles.headerSub}>서핑의 모든 것을 알고 있어요 🤙</Text>
           </View>
         </View>
+        <View style={[styles.statusBadge, { borderColor: statusColor + "55" }]}>
+          <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+          <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
+        </View>
+      </View>
 
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          renderItem={renderMessage}
-          keyExtractor={item => item.id}
-          contentContainerStyle={styles.chatList}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
-          showsVerticalScrollIndicator={false}
-          ListFooterComponent={isTyping ? <TypingBubble C={C} /> : null}
-        />
+      <FlatList
+        ref={flatListRef}
+        data={messages}
+        renderItem={renderMessage}
+        keyExtractor={item => item.id}
+        contentContainerStyle={styles.chatList}
+        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+        showsVerticalScrollIndicator={false}
+        ListFooterComponent={isTyping ? <TypingBubble C={C} /> : null}
+      />
 
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={84}
+      >
         <View style={[styles.footer, isTyping && styles.footerDisabled]}>
           <View style={styles.inputRow}>
             <TextInput
@@ -197,7 +200,7 @@ export default function AIChatScreen() {
               value={inputText}
               onChangeText={setInputText}
               placeholder={isTyping ? "답변을 기다리는 중..." : "오늘 파도 어때요?"}
-              placeholderTextColor={isTyping ? C.textSubtle : C.textSubtle}
+              placeholderTextColor={C.textSubtle}
               onSubmitEditing={isTyping ? undefined : sendMessage}
               editable={!isTyping}
               multiline
@@ -244,7 +247,7 @@ function makeStyles(C: ThemeColors) {
     userText:   { color: "#fff", fontSize: 15, lineHeight: 22 },
     botText:    { color: C.text, fontSize: 15, lineHeight: 22 },
 
-    footer:          { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 20, backgroundColor: C.bgCard, borderTopWidth: 1, borderTopColor: C.border },
+    footer:          { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 96, backgroundColor: C.bgCard, borderTopWidth: 1, borderTopColor: C.border },
     footerDisabled:  { opacity: 0.5 },
     inputDisabled:   { backgroundColor: C.bgSurface },
     inputRow:      { flexDirection: "row", alignItems: "flex-end", gap: 10 },
