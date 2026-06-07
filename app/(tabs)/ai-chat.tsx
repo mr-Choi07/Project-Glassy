@@ -164,7 +164,7 @@ export default function AIChatScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.container}>
+      <KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={Platform.OS === "android" ? 0 : 0} style={styles.container}>
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <View style={styles.headerIcon}><Waves size={18} color={C.primary} /></View>
@@ -244,7 +244,7 @@ function makeStyles(C: ThemeColors) {
     userText:   { color: "#fff", fontSize: 15, lineHeight: 22 },
     botText:    { color: C.text, fontSize: 15, lineHeight: 22 },
 
-    footer:          { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 100, backgroundColor: C.bgCard, borderTopWidth: 1, borderTopColor: C.border },
+    footer:          { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 20, backgroundColor: C.bgCard, borderTopWidth: 1, borderTopColor: C.border },
     footerDisabled:  { opacity: 0.5 },
     inputDisabled:   { backgroundColor: C.bgSurface },
     inputRow:      { flexDirection: "row", alignItems: "flex-end", gap: 10 },

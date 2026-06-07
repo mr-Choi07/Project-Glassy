@@ -217,7 +217,7 @@ export default function HomeScreen() {
   if (noSpotSet) {
     return (
       <SafeAreaView style={styles.safeArea} edges={["top"]}>
-        <View style={styles.header}>
+        <View style={styles.noSpotHeader}>
           <View>
             <Text style={styles.headerSub}>Good surfing 🤙</Text>
             <Text style={styles.headerTitle}>파도 브리핑</Text>
@@ -443,9 +443,10 @@ function makeStyles(C: ThemeColors) {
     safeArea:  { flex: 1, backgroundColor: C.bg },
     scroll:    { flex: 1 },
     content:   { paddingHorizontal: 20, paddingTop: 12 },
-    centered:  { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
+    centered:  { flex: 1, alignItems: "center", justifyContent: "center", padding: 24, paddingBottom: 108 },
 
-    header:      { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 },
+    header:       { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 },
+    noSpotHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, paddingHorizontal: 20, paddingTop: 12 },
     headerSub:   { color: C.textMuted, fontSize: 13, fontWeight: "600", marginBottom: 4 },
     headerTitle: { color: C.text, fontSize: 26, fontWeight: "800" },
     logoutBtn:   { padding: 4 },
