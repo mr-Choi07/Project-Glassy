@@ -479,16 +479,22 @@ export default function LogScreen() {
               <View style={styles.chartCard}>
                 <View style={styles.chartBars}>
                   {monthlyData.map((d) => {
-                    const barH  = d.count > 0 ? Math.max(8, Math.round((d.count / maxMonthCount) * 100)) : 3;
+                    const barH  = d.count > 0 ? Math.max(40, Math.round((d.count / maxMonthCount) * 100)) : 3;
                     const isMax = d.count === maxMonthCount && d.count > 0;
+                    const showInside = barH >= 40 && d.count > 0;
                     return (
                       <View key={d.month} style={styles.chartBarWrap}>
-                        <Text style={styles.chartBarCount}>{d.count > 0 ? `${d.count}` : ""}</Text>
                         <View style={styles.chartBarTrack}>
                           <View style={[
                             styles.chartBarFill,
-                            { height: barH, backgroundColor: isMax ? C.primary : `${C.primary}55` },
-                          ]} />
+                            { height: barH, backgroundColor: isMax ? C.primary : `${C.primary}66` },
+                          ]}>
+                            {showInside && (
+                              <Text style={[styles.chartBarCountInside, isMax && { fontSize: 15 }]}>
+                                {d.count}
+                              </Text>
+                            )}
+                          </View>
                         </View>
                         <Text style={[styles.chartBarLabel, isMax && { color: C.primary, fontWeight: "800" }]}>
                           {d.month}
@@ -718,14 +724,14 @@ function makeStyles(C: ThemeColors) {
     topSpotEmoji: { fontSize: 26 },
     topSpotName:  { color: C.text, fontSize: 20, fontWeight: "800" },
 
-    chartCard:     { backgroundColor: C.bgCard, borderRadius: 20, padding: 18, borderWidth: 1, borderColor: C.border, marginBottom: 14 },
-    chartBars:     { flexDirection: "row", alignItems: "flex-end", height: 120, gap: 6 },
-    chartBarWrap:  { flex: 1, alignItems: "center", gap: 4 },
-    chartBarCount: { color: C.textSubtle, fontSize: 10, fontWeight: "700", height: 14 },
-    chartBarTrack: { flex: 1, width: "100%", justifyContent: "flex-end" },
-    chartBarFill:  { width: "100%", borderRadius: 6 },
-    chartBarLabel: { color: C.textSubtle, fontSize: 11, fontWeight: "600" },
-    chartHint:     { color: C.textSubtle, fontSize: 11, textAlign: "right", marginTop: 8 },
+    chartCard:            { backgroundColor: C.bgCard, borderRadius: 20, padding: 18, borderWidth: 1, borderColor: C.border, marginBottom: 14 },
+    chartBars:            { flexDirection: "row", alignItems: "flex-end", height: 120, gap: 6 },
+    chartBarWrap:         { flex: 1, alignItems: "center", gap: 4 },
+    chartBarTrack:        { flex: 1, width: "100%", justifyContent: "flex-end" },
+    chartBarFill:         { width: "100%", borderRadius: 8, alignItems: "center", justifyContent: "center" },
+    chartBarCountInside:  { color: "#fff", fontSize: 13, fontWeight: "800" },
+    chartBarLabel:        { color: C.textSubtle, fontSize: 11, fontWeight: "600" },
+    chartHint:            { color: C.textSubtle, fontSize: 11, textAlign: "right", marginTop: 8 },
   });
 }
 
