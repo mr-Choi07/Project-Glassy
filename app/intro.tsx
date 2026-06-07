@@ -128,6 +128,15 @@ function WaveChartSlide() {
 // ────────────────────────────────────────────────────────────
 const AI_MESSAGE = "오늘 양양 파도는 초급자에게 적합해요. 오전 9시가 가장 좋은 타이밍입니다 🤙";
 
+function ScoreText({ anim }: { anim: Animated.Value }) {
+  const [score, setScore] = useState(0);
+  useEffect(() => {
+    const id = anim.addListener(({ value }) => setScore(Math.round(value)));
+    return () => anim.removeListener(id);
+  }, [anim]);
+  return <Text style={styles.scoreValue}>{score}</Text>;
+}
+
 function AiCoachSlide() {
   const [displayedText, setDisplayedText] = useState("");
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -175,9 +184,7 @@ function AiCoachSlide() {
         <View style={styles.scoreRow}>
           <View>
             <Text style={styles.scoreLabel}>오늘의 서핑 지수</Text>
-            <Animated.Text style={styles.scoreValue}>
-              {scoreAnim.interpolate({ inputRange: [0, 82], outputRange: ["0", "82"] })}
-            </Animated.Text>
+            <ScoreText anim={scoreAnim} />
           </View>
           <View style={styles.scoreCircle}>
             <Text style={styles.scoreCircleText}>😎</Text>
@@ -426,7 +433,7 @@ const styles = StyleSheet.create({
     alignItems: "center", marginBottom: 16,
   },
   scoreLabel: { color: Colors.textMuted, fontSize: 12, marginBottom: 4 },
-  scoreValue: { color: Colors.primary, fontSize: 42, fontWeight: "800" },
+  scoreValue: { color: Colors.primary, fontSize: 36, fontWeight: "800" },
   scoreCircle: {
     width: 64, height: 64, borderRadius: 32,
     backgroundColor: "rgba(14,165,233,0.12)",
