@@ -12,7 +12,7 @@
 - **실시간 파도/바람/수온 정보**: Open-Meteo Marine API를 연동해 스팟별 실시간 해양 데이터 제공
 - **파고 보정 알고리즘**: 스웰 방향(swell window)과 스팟별 지형 차폐 효과(shelter factor)를 계산해, 예보상 파고를 스팟 체감 파고에 가깝게 보정하는 로직을 직접 구현
 - **서핑 일지**: 날짜, 파고, 바람, 수온, 보드 종류(롱보드/숏보드/패들보드/윈드서핑/포일서핑), 서핑 시간 등을 기록하고 Firestore에 저장·통계로 조회
-- **AI 채팅**: Google Gemini API를 연동해 서핑 관련 질문에 답변하는 AI 어시스턴트 탭
+- **AI 채팅**: Upstage Solar API(solar-mini)를 연동해 서핑 관련 질문에 답변하는 AI 어시스턴트 탭
 - **회원 인증**: Firebase Authentication 기반 로그인/회원가입
 - **다크모드 지원**: 테마 컨텍스트를 이용한 라이트/다크 모드 전환
 
@@ -20,7 +20,7 @@
 
 - **Framework**: Expo (React Native) + TypeScript, Expo Router
 - **Backend/Infra**: Firebase (Authentication, Firestore)
-- **AI**: Google Generative AI (Gemini API)
+- **AI**: Upstage Solar API (solar-mini)
 - **외부 API**: Open-Meteo Marine API, Open-Meteo Forecast API
 - **기타**: Axios, React Navigation, React Native Reanimated
 
