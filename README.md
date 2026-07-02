@@ -1,50 +1,44 @@
-# Welcome to your Expo app 👋
+# Glassy 🌊
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+서퍼를 위한 실시간 파도·바람 정보 및 서핑 일지 앱입니다.
+"Glassy"는 바람이 없어 파도 표면이 유리처럼 매끄러운, 서퍼들이 가장 선호하는 바다 상태를 뜻하는 서핑 용어에서 이름을 따왔습니다.
 
-## Get started
+## 만든 이유
 
-1. Install dependencies
+서핑을 하면서 스팟마다 실제 체감 파도 크기가 기상 API가 알려주는 값과 다르다는 걸 자주 느꼈습니다. 스웰 방향과 지형에 따라 같은 파고 예보라도 스팟별로 체감이 완전히 다르기 때문인데, 이 오차를 보정해서 좀 더 정확한 정보를 제공하는 앱을 직접 만들어보고 싶어서 시작했습니다.
 
-   ```bash
-   npm install
-   ```
+## 주요 기능
 
-2. Start the app
+- **실시간 파도/바람/수온 정보**: Open-Meteo Marine API를 연동해 스팟별 실시간 해양 데이터 제공
+- **파고 보정 알고리즘**: 스웰 방향(swell window)과 스팟별 지형 차폐 효과(shelter factor)를 계산해, 예보상 파고를 스팟 체감 파고에 가깝게 보정하는 로직을 직접 구현
+- **서핑 일지**: 날짜, 파고, 바람, 수온, 보드 종류(롱보드/숏보드/패들보드/윈드서핑/포일서핑), 서핑 시간 등을 기록하고 Firestore에 저장·통계로 조회
+- **AI 채팅**: Google Gemini API를 연동해 서핑 관련 질문에 답변하는 AI 어시스턴트 탭
+- **회원 인증**: Firebase Authentication 기반 로그인/회원가입
+- **다크모드 지원**: 테마 컨텍스트를 이용한 라이트/다크 모드 전환
 
-   ```bash
-   npx expo start
-   ```
+## 사용 기술
 
-In the output, you'll find options to open the app in a
+- **Framework**: Expo (React Native) + TypeScript, Expo Router
+- **Backend/Infra**: Firebase (Authentication, Firestore)
+- **AI**: Google Generative AI (Gemini API)
+- **외부 API**: Open-Meteo Marine API, Open-Meteo Forecast API
+- **기타**: Axios, React Navigation, React Native Reanimated
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## 기술적으로 신경 쓴 부분
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+- 외부 기상 API 호출 실패 시 자동 재시도 및 메모리 캐시(TTL 10분)를 두어 불필요한 API 콜을 줄이고 응답 속도를 개선
+- 스웰 방향이 스팟의 유효 파도 수신 각도(swell window) 안에 있는지, 각도 차이에 따라 보정 계수를 다르게 적용하는 방향 기반 보정 함수 구현
+- 실시간 데이터가 없는 시간대에는 가장 가까운 유효 시간대 값을 탐색해 대체하는 fallback 로직 적용
 
-## Get a fresh project
-
-When you're ready, run:
+## 실행 방법
 
 ```bash
-npm run reset-project
+npm install
+npx expo start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Expo Go 앱, Android 에뮬레이터, iOS 시뮬레이터, 웹 중 원하는 환경에서 실행할 수 있습니다.
 
-## Learn more
+## 회고
 
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+기상 API 데이터를 그대로 보여주는 것과, 실제 사용자가 체감하는 값에 가깝게 보정해서 보여주는 것 사이의 간극을 직접 알고리즘으로 메워보면서, 단순한 CRUD 앱을 넘어 도메인 지식을 코드로 옮기는 경험을 해볼 수 있었습니다.
